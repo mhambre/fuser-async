@@ -3,7 +3,7 @@ INTERACTIVE ?= i
 
 
 build: pre
-	cargo build --examples --features=experimental
+	cargo build --examples --features=async-rust
 
 format:
 	cargo fmt --all

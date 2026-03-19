@@ -5,7 +5,6 @@ mod canonical_temp_dir;
 mod cargo;
 mod command_utils;
 mod commands;
-mod experimental;
 mod features;
 mod fuse_conf;
 mod fusermount;

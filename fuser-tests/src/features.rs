@@ -5,8 +5,8 @@ use std::fmt;
 /// Cargo feature flags for fuser.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Feature {
-    /// Experimental async API.
-    Experimental,
+    /// Use async-fuse for mounting.
+    AsyncRust,
     /// Use libfuse2 for mounting.
     Libfuse2,
     /// Use libfuse3 for mounting.
@@ -17,7 +17,7 @@ impl Feature {
     /// Returns the feature name as used in Cargo.toml.
     fn as_str(&self) -> &'static str {
         match self {
-            Feature::Experimental => "experimental",
+            Feature::AsyncRust => "async-rust",
             Feature::Libfuse2 => "libfuse2",
             Feature::Libfuse3 => "libfuse3",
         }

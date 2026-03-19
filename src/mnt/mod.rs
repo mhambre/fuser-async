@@ -10,8 +10,9 @@ mod fuse2_sys;
 mod fuse3;
 #[cfg(fuser_mount_impl = "libfuse3")]
 mod fuse3_sys;
-
-#[cfg(fuser_mount_impl = "pure-rust")]
+#[cfg(fuser_mount_impl = "async-rust")]
+mod fuse_async_rust;
+#[cfg(any(fuser_mount_impl = "pure-rust", fuser_mount_impl = "async-rust"))]
 mod fuse_pure;
 pub(crate) mod mount_options;
 
@@ -24,6 +25,10 @@ use log::warn;
 use mount_options::MountOption;
 
 use crate::dev_fuse::DevFuse;
+#[cfg(feature = "async-rust")]
+use crate::lib_async::dev_fuse::AsyncDevFuse;
+#[cfg(feature = "async-rust")]
+use crate::mnt::fuse_async_rust::AsyncMountImpl;
 
 /// Helper function to provide options as a `fuse_args` struct
 /// (which contains an argc count and an argv pointer)
@@ -165,6 +170,68 @@ impl Drop for Mount {
     }
 }
 
+/// Async version of `Mount`. This is only supported with the "async-rust" feature, and is not yet
+/// considered stable.
+#[cfg(feature = "async-rust")]
+#[derive(Debug)]
+pub(crate) struct AsyncMount {
+    mount_impl: Option<AsyncMountImpl>,
+    mount_point: PathBuf,
+}
+
+impl AsyncMount {
+    /// Create a new AsyncMount. This does not actually mount the filesystem, call `AsyncMount::mount` to do that.
+    pub(crate) fn new() -> AsyncMount {
+        AsyncMount {
+            mount_impl: None,
+            mount_point: PathBuf::new(),
+        }
+    }
+
+    /// Mount the filesystem. This must be called before the filesystem can be used.
+    pub(crate) async fn mount(
+        mut self,
+        mountpoint: &Path,
+        options: &[MountOption],
+        acl: SessionACL,
+    ) -> tokio::io::Result<Self> {
+        self.mount_point = mountpoint.to_path_buf();
+
+        #[cfg(fuser_mount_impl = "async-rust")]
+        {
+            let uninit_mount = fuse_async_rust::AsyncMountImpl::new(mountpoint)?;
+            self.mount_impl = Some(uninit_mount.mount_impl(options, acl).await?);
+        }
+
+        return Ok(self);
+    }
+
+    /// Non-blocking unmount. Prefer this over `Drop` for async mounts, since `Drop` will block the current thread.
+    pub(crate) async fn umount(mut self) -> tokio::io::Result<()> {
+        match self.mount_impl.take() {
+            Some(mut mount) => {
+                info!("Unmounting {}", self.mount_point.display());
+                mount.umount_impl().await
+            }
+            None => Ok(()),
+        }
+    }
+}
+
+impl Drop for AsyncMount {
+    /// RAII unmount. Note that this will block the current thread, so it's recommended to call `umount`
+    /// explicitly instead of relying on this.
+    fn drop(&mut self) {
+        if let Some(mut mount) = self.mount_impl.take() {
+            if let Err(err) = tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(mount.umount_impl())
+            }) {
+                warn!("Unmount failed: {}", err);
+            }
+        }
+    }
+}
+
 #[cfg_attr(fuser_mount_impl = "macos-no-mount", expect(dead_code))]
 fn libc_umount(mnt: &CStr) -> nix::Result<()> {
     #[cfg(any(
@@ -220,6 +287,41 @@ fn is_mounted(fuse_device: &DevFuse) -> bool {
             }
         };
     }
+}
+
+/// Identical to `is_mounted`, but for `AsyncDevFuse`. This is used by the async Rust mount implementation.
+#[cfg(feature = "async-rust")]
+pub async fn is_mounted_async(fuse: &AsyncDevFuse) -> bool {
+    use nix::poll::PollFd;
+    use nix::poll::PollFlags;
+    use nix::poll::PollTimeout;
+    use nix::poll::poll;
+    use std::os::fd::AsRawFd;
+
+    let fuse = fuse.as_raw_fd(); // capture fd (Send-safe)
+
+    tokio::task::spawn_blocking(move || {
+        // reconstruct BorrowedFd safely
+        let fd = unsafe { std::os::fd::BorrowedFd::borrow_raw(fuse) };
+
+        loop {
+            let mut poll_fd = PollFd::new(fd, PollFlags::empty());
+
+            match poll(std::slice::from_mut(&mut poll_fd), PollTimeout::ZERO) {
+                Ok(0) => return true,
+                Ok(1) => {
+                    return poll_fd
+                        .revents()
+                        .is_some_and(|r| r.contains(PollFlags::POLLERR));
+                }
+                Ok(_) => unreachable!(),
+                Err(nix::errno::Errno::EINTR) => continue,
+                Err(err) => panic!("Poll failed with error {err}"),
+            }
+        }
+    })
+    .await
+    .expect("blocking task panicked")
 }
 
 #[cfg(test)]

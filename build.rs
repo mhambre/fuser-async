@@ -1,11 +1,17 @@
 fn main() {
     // Register rustc cfg for switching between mount implementations.
     println!(
-        "cargo::rustc-check-cfg=cfg(fuser_mount_impl, values(\"pure-rust\", \"libfuse2\", \"libfuse3\", \"macos-no-mount\"))"
+        "cargo::rustc-check-cfg=cfg(fuser_mount_impl, values(\"pure-rust\", \"libfuse2\", \"libfuse3\", \"macos-no-mount\", \"async-rust\"))"
     );
 
     let target_os =
         std::env::var("CARGO_CFG_TARGET_OS").expect("CARGO_CFG_TARGET_OS should be set");
+
+    if cfg!(feature = "async-rust")
+        && !matches!(target_os.as_str(), "linux" | "macos")
+    {
+        panic!("async-rust mount implementation is only supported on Linux and macOS");
+    }
 
     if matches!(
         target_os.as_str(),
@@ -43,6 +49,11 @@ fn main() {
                 }
             }
         }
+    }
+
+    // Async mount implementation selection.
+    if cfg!(feature = "async-rust") {
+        println!("cargo::rustc-cfg=fuser_mount_impl=\"async-rust\"");
     }
 }
 
