@@ -90,7 +90,7 @@ mod dev_fuse;
 mod dev_fuse_async;
 mod forget_one;
 #[cfg(feature = "async")]
-mod lib_async;
+pub mod lib_async;
 mod ll;
 mod mnt;
 mod notify;

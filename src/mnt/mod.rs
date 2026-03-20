@@ -10,9 +10,9 @@ mod fuse2_sys;
 mod fuse3;
 #[cfg(fuser_mount_impl = "libfuse3")]
 mod fuse3_sys;
-#[cfg(fuser_mount_impl = "async-rust")]
-mod fuse_async_rust;
-#[cfg(any(fuser_mount_impl = "pure-rust", fuser_mount_impl = "async-rust"))]
+#[cfg(fuser_mount_impl = "pure-rust-async")]
+mod fuse_async_pure;
+#[cfg(any(fuser_mount_impl = "pure-rust", fuser_mount_impl = "pure-rust-async"))]
 mod fuse_pure;
 pub(crate) mod mount_options;
 
@@ -28,7 +28,7 @@ use crate::dev_fuse::DevFuse;
 #[cfg(feature = "async")]
 use crate::dev_fuse_async::AsyncDevFuse;
 #[cfg(feature = "async")]
-use crate::mnt::fuse_async_rust::AsyncMountImpl;
+use crate::mnt::fuse_async_pure::AsyncMountImpl;
 
 /// Helper function to provide options as a `fuse_args` struct
 /// (which contains an argc count and an argv pointer)
@@ -70,7 +70,7 @@ use crate::SessionACL;
 
 #[derive(Debug)]
 enum MountImpl {
-    #[cfg(any(fuser_mount_impl = "pure-rust", fuser_mount_impl = "async-rust"))]
+    #[cfg(any(fuser_mount_impl = "pure-rust", fuser_mount_impl = "pure-rust-async"))]
     Pure(fuse_pure::MountImpl),
     #[cfg(fuser_mount_impl = "libfuse2")]
     Fuse2(fuse2::MountImpl),
@@ -81,7 +81,7 @@ enum MountImpl {
 impl MountImpl {
     fn umount_impl(&mut self) -> io::Result<()> {
         match self {
-            #[cfg(any(fuser_mount_impl = "pure-rust", fuser_mount_impl = "async-rust"))]
+            #[cfg(any(fuser_mount_impl = "pure-rust", fuser_mount_impl = "pure-rust-async"))]
             MountImpl::Pure(mount) => mount.umount_impl(),
             #[cfg(fuser_mount_impl = "libfuse2")]
             MountImpl::Fuse2(mount) => mount.umount_impl(),
@@ -106,7 +106,7 @@ impl Mount {
         options: &[MountOption],
         acl: SessionACL,
     ) -> io::Result<(Arc<DevFuse>, Mount)> {
-        #[cfg(any(fuser_mount_impl = "pure-rust", fuser_mount_impl = "async-rust"))]
+        #[cfg(any(fuser_mount_impl = "pure-rust", fuser_mount_impl = "pure-rust-async"))]
         {
             let (dev_fuse, mount) = fuse_pure::MountImpl::new(mountpoint, options, acl)?;
             Ok((
@@ -198,9 +198,9 @@ impl AsyncMount {
     ) -> tokio::io::Result<Self> {
         self.mount_point = mountpoint.to_path_buf();
 
-        #[cfg(fuser_mount_impl = "async-rust")]
+        #[cfg(fuser_mount_impl = "pure-rust-async")]
         {
-            let uninit_mount = fuse_async_rust::AsyncMountImpl::new(mountpoint)?;
+            let uninit_mount = fuse_async_pure::AsyncMountImpl::new(mountpoint)?;
             self.mount_impl = Some(uninit_mount.mount_impl(options, acl).await?);
         }
 
@@ -268,8 +268,8 @@ fn libc_umount(mnt: &CStr) -> nix::Result<()> {
 /// yet destroyed by the kernel.
 #[cfg(any(
     all(not(target_os = "macos"), test),
-    fuser_mount_impl = "pure-rust",
-    fuser_mount_impl = "async-rust"
+    fuser_mount_impl = "pure-rust-async",
+    fuser_mount_impl = "pure-rust"
 ))]
 fn is_mounted(fuse_device: &DevFuse) -> bool {
     use std::os::unix::io::AsFd;
@@ -301,8 +301,8 @@ fn is_mounted(fuse_device: &DevFuse) -> bool {
 }
 
 /// Identical to `is_mounted`, but for `AsyncDevFuse`. This is used by the async Rust mount implementation.
-#[cfg(feature = "async")]
-pub async fn is_mounted_async(fuse: &AsyncDevFuse) -> bool {
+#[cfg(fuser_mount_impl = "pure-rust-async")]
+pub(crate) async fn is_mounted_async(fuse: &AsyncDevFuse) -> bool {
     use nix::poll::PollFd;
     use nix::poll::PollFlags;
     use nix::poll::PollTimeout;
