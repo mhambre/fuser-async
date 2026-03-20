@@ -7,6 +7,8 @@ use std::fmt;
 pub(crate) enum Feature {
     /// Use async-fuse for mounting.
     AsyncRust,
+    /// Initial experimental async mount implementation
+    Experimental,
     /// Use libfuse2 for mounting.
     Libfuse2,
     /// Use libfuse3 for mounting.
@@ -17,7 +19,8 @@ impl Feature {
     /// Returns the feature name as used in Cargo.toml.
     fn as_str(&self) -> &'static str {
         match self {
-            Feature::AsyncRust => "async-rust",
+            Feature::AsyncRust => "async",
+            Feature::Experimental => "experimental",
             Feature::Libfuse2 => "libfuse2",
             Feature::Libfuse3 => "libfuse3",
         }

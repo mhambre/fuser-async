@@ -25,9 +25,9 @@ use log::warn;
 use mount_options::MountOption;
 
 use crate::dev_fuse::DevFuse;
-#[cfg(feature = "async-rust")]
+#[cfg(feature = "async")]
 use crate::dev_fuse_async::AsyncDevFuse;
-#[cfg(feature = "async-rust")]
+#[cfg(feature = "async")]
 use crate::mnt::fuse_async_rust::AsyncMountImpl;
 
 /// Helper function to provide options as a `fuse_args` struct
@@ -70,7 +70,7 @@ use crate::SessionACL;
 
 #[derive(Debug)]
 enum MountImpl {
-    #[cfg(fuser_mount_impl = "pure-rust")]
+    #[cfg(any(fuser_mount_impl = "pure-rust", fuser_mount_impl = "async-rust"))]
     Pure(fuse_pure::MountImpl),
     #[cfg(fuser_mount_impl = "libfuse2")]
     Fuse2(fuse2::MountImpl),
@@ -81,7 +81,7 @@ enum MountImpl {
 impl MountImpl {
     fn umount_impl(&mut self) -> io::Result<()> {
         match self {
-            #[cfg(fuser_mount_impl = "pure-rust")]
+            #[cfg(any(fuser_mount_impl = "pure-rust", fuser_mount_impl = "async-rust"))]
             MountImpl::Pure(mount) => mount.umount_impl(),
             #[cfg(fuser_mount_impl = "libfuse2")]
             MountImpl::Fuse2(mount) => mount.umount_impl(),
@@ -106,7 +106,7 @@ impl Mount {
         options: &[MountOption],
         acl: SessionACL,
     ) -> io::Result<(Arc<DevFuse>, Mount)> {
-        #[cfg(fuser_mount_impl = "pure-rust")]
+        #[cfg(any(fuser_mount_impl = "pure-rust", fuser_mount_impl = "async-rust"))]
         {
             let (dev_fuse, mount) = fuse_pure::MountImpl::new(mountpoint, options, acl)?;
             Ok((
@@ -170,15 +170,16 @@ impl Drop for Mount {
     }
 }
 
-/// Async version of `Mount`. This is only supported with the "async-rust" feature, and is not yet
+/// Async version of `Mount`. This is only supported with the "async" feature, and is not yet
 /// considered stable.
-#[cfg(feature = "async-rust")]
+#[cfg(feature = "async")]
 #[derive(Debug)]
 pub(crate) struct AsyncMount {
     mount_impl: Option<AsyncMountImpl>,
     mount_point: PathBuf,
 }
 
+#[cfg(feature = "async")]
 impl AsyncMount {
     /// Create a new AsyncMount. This does not actually mount the filesystem, call `AsyncMount::mount` to do that.
     pub(crate) fn new() -> AsyncMount {
@@ -223,6 +224,7 @@ impl AsyncMount {
     }
 }
 
+#[cfg(feature = "async")]
 impl Drop for AsyncMount {
     /// RAII unmount. Note that this will block the current thread, so it's recommended to call `umount`
     /// explicitly instead of relying on this.
@@ -264,7 +266,11 @@ fn libc_umount(mnt: &CStr) -> nix::Result<()> {
 
 /// Warning: This will return true if the filesystem has been detached (lazy unmounted), but not
 /// yet destroyed by the kernel.
-#[cfg(any(all(not(target_os = "macos"), test), fuser_mount_impl = "pure-rust"))]
+#[cfg(any(
+    all(not(target_os = "macos"), test),
+    fuser_mount_impl = "pure-rust",
+    fuser_mount_impl = "async-rust"
+))]
 fn is_mounted(fuse_device: &DevFuse) -> bool {
     use std::os::unix::io::AsFd;
     use std::slice;
@@ -295,7 +301,7 @@ fn is_mounted(fuse_device: &DevFuse) -> bool {
 }
 
 /// Identical to `is_mounted`, but for `AsyncDevFuse`. This is used by the async Rust mount implementation.
-#[cfg(feature = "async-rust")]
+#[cfg(feature = "async")]
 pub async fn is_mounted_async(fuse: &AsyncDevFuse) -> bool {
     use nix::poll::PollFd;
     use nix::poll::PollFlags;

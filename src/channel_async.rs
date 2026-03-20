@@ -4,12 +4,12 @@ use std::sync::Arc;
 
 use nix::errno::Errno;
 
-#[cfg(feature = "async-rust")]
+#[cfg(feature = "async")]
 use crate::dev_fuse_async::AsyncDevFuse;
 
 /// A raw async communication channel to the FUSE kernel driver. This uses `AsyncDevFuse` under the hood and
 /// provides async APIs for receiving data. This is used by the async Rust mount implementation.
-#[cfg(feature = "async-rust")]
+#[cfg(feature = "async")]
 #[derive(Debug, Clone)]
 pub(crate) struct AsyncChannel(Arc<AsyncDevFuse>);
 
@@ -96,7 +96,7 @@ impl AsyncChannel {
 
 /// Object for sending data to an `AsyncChannel`. This can be safely cloned and sent to
 /// other threads and is non-blocking.
-#[cfg(feature = "async-rust")]
+#[cfg(feature = "async")]
 #[derive(Clone, Debug)]
 pub(crate) struct AsyncChannelSender(Arc<AsyncDevFuse>);
 

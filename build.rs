@@ -7,10 +7,12 @@ fn main() {
     let target_os =
         std::env::var("CARGO_CFG_TARGET_OS").expect("CARGO_CFG_TARGET_OS should be set");
 
-    if cfg!(feature = "async-rust")
-        && !matches!(target_os.as_str(), "linux" | "macos")
-    {
-        panic!("async-rust mount implementation is only supported on Linux and macOS");
+    if cfg!(feature = "async") {
+        if !matches!(target_os.as_str(), "linux" | "macos") {
+            panic!("async mount implementation is only supported on Linux and macOS");
+        }
+        println!("cargo::rustc-cfg=fuser_mount_impl=\"async-rust\"");
+        return;
     }
 
     if matches!(
@@ -51,10 +53,7 @@ fn main() {
         }
     }
 
-    // Async mount implementation selection.
-    if cfg!(feature = "async-rust") {
-        println!("cargo::rustc-cfg=fuser_mount_impl=\"async-rust\"");
-    }
+    // Async mount implementation selection is handled above.
 }
 
 fn configure_libfuse3() -> Result<(), pkg_config::Error> {

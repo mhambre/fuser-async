@@ -15,7 +15,7 @@ use tokio::task::JoinSet;
 use crate::ansi::green;
 use crate::canonical_temp_dir::CanonicalTempDir;
 use crate::cargo::cargo_build_example;
-// use crate::experimental::run_experimental_tests;
+use crate::experimental::run_experimental_tests;
 use crate::features::Feature;
 use crate::features::features_to_flags;
 use crate::fuse_conf::fuse_conf_remove_user_allow_other;
@@ -74,9 +74,9 @@ async fn run_mount_tests_inner(libfuse: Libfuse) -> anyhow::Result<()> {
 
     green!("All mount tests passed!");
 
-    // run_experimental_tests(libfuse)
-    //     .await
-    //     .context("experimental mount tests failed")?;
+    run_experimental_tests(libfuse)
+        .await
+        .context("experimental mount tests failed")?;
 
     Ok(())
 }

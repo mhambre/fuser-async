@@ -1,5 +1,5 @@
 //! Async wrapper for FUSE mounting and unmounting using the pure Rust implementation. This is used
-//! by the "async-rust" feature.
+//! by the "async" feature.
 //!
 //! We accept that micro-optimizations are possible with this implementation, however, since the a lot of the
 //! lower level FUSE interactions are still blocking, effort into this would be premature. As such the main
