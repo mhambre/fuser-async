@@ -10,10 +10,10 @@ use log::error;
 use log::warn;
 use std::ffi::CString;
 use std::os::unix::ffi::OsStrExt;
-use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::io;
+use tokio::net::UnixStream;
 
 use crate::SessionACL;
 use crate::dev_fuse_async::AsyncDevFuse;
@@ -53,18 +53,25 @@ impl AsyncMountImpl {
         let mountpoint = std::ffi::OsStr::from_bytes(self.mountpoint.as_bytes()).to_os_string();
         let options = options.to_vec();
 
-        let (dev_fuse, sock) = tokio::task::spawn_blocking(move || {
+        let (device, sock) = tokio::task::spawn_blocking(move || {
             fuse_pure::fuse_mount_pure(mountpoint.as_os_str(), &options, acl)
         })
         .await
         .map_err(|_err| io::Error::other("blocking task panicked"))??;
 
-        let async_dev = AsyncDevFuse::from_file(dev_fuse.0)?;
-        let file = Arc::new(async_dev);
+        let async_device = AsyncDevFuse::from_file(device.0)?;
+        let file = Arc::new(async_device);
         let (tx, rx) = tokio::sync::oneshot::channel();
 
         self.fuse_device = Some(file);
-        self.auto_unmount_socket = sock;
+        self.auto_unmount_socket = sock
+            .map(|sock| {
+                sock.set_nonblocking(true).map_err(|_| {
+                    io::Error::other("Failed to set non-blocking on auto unmount socket")
+                })?;
+                UnixStream::from_std(sock)
+            })
+            .transpose()?;
         self.unmount_tx = Some(tx);
 
         tokio::spawn(async {
