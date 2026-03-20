@@ -26,7 +26,7 @@ use mount_options::MountOption;
 
 use crate::dev_fuse::DevFuse;
 #[cfg(feature = "async-rust")]
-use crate::lib_async::dev_fuse::AsyncDevFuse;
+use crate::dev_fuse_async::AsyncDevFuse;
 #[cfg(feature = "async-rust")]
 use crate::mnt::fuse_async_rust::AsyncMountImpl;
 
@@ -215,6 +215,11 @@ impl AsyncMount {
             }
             None => Ok(()),
         }
+    }
+
+    /// Get a reference to the underlying `AsyncDevFuse`. This will return `None` if the filesystem is not yet mounted.
+    pub(crate) fn dev_fuse(&self) -> Option<&Arc<AsyncDevFuse>> {
+        self.mount_impl.as_ref().and_then(|m| m.dev_fuse())
     }
 }
 

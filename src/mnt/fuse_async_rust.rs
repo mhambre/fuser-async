@@ -16,11 +16,13 @@ use std::sync::Arc;
 use tokio::io;
 
 use crate::SessionACL;
-use crate::lib_async::dev_fuse::AsyncDevFuse;
+use crate::dev_fuse_async::AsyncDevFuse;
 use crate::mnt::fuse_pure;
 use crate::mnt::is_mounted_async;
 use crate::mnt::mount_options::MountOption;
 
+/// Inner implementation of the async mount. This is held by `AsyncMount` and `AsyncSession` to
+/// manage the actual mount (file descriptor) lifecycle.
 #[derive(Debug)]
 pub(crate) struct AsyncMountImpl {
     mountpoint: CString,
@@ -65,7 +67,6 @@ impl AsyncMountImpl {
         self.auto_unmount_socket = sock;
         self.unmount_tx = Some(tx);
 
-        // We do this so drop unmount can be non-blocking.
         tokio::spawn(async {
             // Wait for unmount signal
             let Ok(mut mount) = rx.await else {
@@ -130,5 +131,10 @@ impl AsyncMountImpl {
         }
 
         Ok(())
+    }
+
+    /// Get a reference to the underlying `AsyncDevFuse`. This will return `None` if the filesystem is not yet mounted.
+    pub(crate) fn dev_fuse(&self) -> Option<&Arc<AsyncDevFuse>> {
+        self.fuse_device.as_ref()
     }
 }

@@ -83,13 +83,19 @@ pub use crate::session::SessionUnmounter;
 mod access_flags;
 mod bsd_file_flags;
 mod channel;
+#[cfg(feature = "async-rust")]
+mod channel_async;
 mod dev_fuse;
+#[cfg(feature = "async-rust")]
+mod dev_fuse_async;
 mod forget_one;
 #[cfg(feature = "async-rust")]
 mod lib_async;
 mod ll;
 mod mnt;
 mod notify;
+// #[cfg(feature = "async-rust")]
+// mod notify_async;
 mod open_flags;
 mod passthrough;
 mod poll_events;
@@ -99,6 +105,8 @@ mod reply;
 mod request;
 mod request_param;
 mod session;
+// #[cfg(feature = "async-rust")]
+// mod session_async;
 mod time;
 
 /// We generally support async reads
