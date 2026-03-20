@@ -10,9 +10,9 @@ mod fuse2_sys;
 mod fuse3;
 #[cfg(fuser_mount_impl = "libfuse3")]
 mod fuse3_sys;
-#[cfg(fuser_mount_impl = "pure-rust-async")]
+#[cfg(feature = "async")]
 mod fuse_async_pure;
-#[cfg(any(fuser_mount_impl = "pure-rust", fuser_mount_impl = "pure-rust-async"))]
+#[cfg(any(fuser_mount_impl = "pure-rust", feature = "async"))]
 mod fuse_pure;
 pub(crate) mod mount_options;
 
@@ -70,7 +70,7 @@ use crate::SessionACL;
 
 #[derive(Debug)]
 enum MountImpl {
-    #[cfg(any(fuser_mount_impl = "pure-rust", fuser_mount_impl = "pure-rust-async"))]
+    #[cfg(fuser_mount_impl = "pure-rust")]
     Pure(fuse_pure::MountImpl),
     #[cfg(fuser_mount_impl = "libfuse2")]
     Fuse2(fuse2::MountImpl),
@@ -81,7 +81,7 @@ enum MountImpl {
 impl MountImpl {
     fn umount_impl(&mut self) -> io::Result<()> {
         match self {
-            #[cfg(any(fuser_mount_impl = "pure-rust", fuser_mount_impl = "pure-rust-async"))]
+            #[cfg(fuser_mount_impl = "pure-rust")]
             MountImpl::Pure(mount) => mount.umount_impl(),
             #[cfg(fuser_mount_impl = "libfuse2")]
             MountImpl::Fuse2(mount) => mount.umount_impl(),
@@ -106,7 +106,7 @@ impl Mount {
         options: &[MountOption],
         acl: SessionACL,
     ) -> io::Result<(Arc<DevFuse>, Mount)> {
-        #[cfg(any(fuser_mount_impl = "pure-rust", fuser_mount_impl = "pure-rust-async"))]
+        #[cfg(fuser_mount_impl = "pure-rust")]
         {
             let (dev_fuse, mount) = fuse_pure::MountImpl::new(mountpoint, options, acl)?;
             Ok((
@@ -182,7 +182,7 @@ pub(crate) struct AsyncMount {
 #[cfg(feature = "async")]
 impl AsyncMount {
     /// Create a new AsyncMount. This does not actually mount the filesystem, call [`AsyncMount::mount`] to
-    /// do that.
+    /// do that
     pub(crate) fn new() -> AsyncMount {
         AsyncMount {
             mount_impl: None,
@@ -198,12 +198,8 @@ impl AsyncMount {
         acl: SessionACL,
     ) -> tokio::io::Result<Self> {
         self.mount_point = mountpoint.to_path_buf();
-
-        #[cfg(fuser_mount_impl = "pure-rust-async")]
-        {
-            let uninit_mount = fuse_async_pure::AsyncMountImpl::new(mountpoint)?;
-            self.mount_impl = Some(uninit_mount.mount_impl(options, acl).await?);
-        }
+        let uninit_mount = fuse_async_pure::AsyncMountImpl::new(mountpoint)?;
+        self.mount_impl = Some(uninit_mount.mount_impl(options, acl).await?);
 
         return Ok(self);
     }
@@ -232,13 +228,17 @@ impl Drop for AsyncMount {
     /// RAII unmount. Note that this will block the current thread, so it's recommended to call
     /// [`AsyncMount::umount`] explicitly instead of relying on this.
     fn drop(&mut self) {
-        if let Some(mut mount) = self.mount_impl.take() {
-            if let Err(err) = tokio::task::block_in_place(|| {
-                tokio::runtime::Handle::current().block_on(mount.umount_impl())
-            }) {
+        // Mount was either unmounted explicitly, taken, or never mounted at all, so nothing to do.
+        let Some(mount) = self.mount_impl.take() else {
+            return;
+        };
+
+        mount
+            .umount_impl_sync()
+            .inspect_err(|err| {
                 warn!("Unmount failed: {}", err);
-            }
-        }
+            })
+            .ok();
     }
 }
 
@@ -269,11 +269,7 @@ fn libc_umount(mnt: &CStr) -> nix::Result<()> {
 
 /// Warning: This will return true if the filesystem has been detached (lazy unmounted), but not
 /// yet destroyed by the kernel.
-#[cfg(any(
-    all(not(target_os = "macos"), test),
-    fuser_mount_impl = "pure-rust-async",
-    fuser_mount_impl = "pure-rust"
-))]
+#[cfg(any(all(not(target_os = "macos"), test), fuser_mount_impl = "pure-rust"))]
 fn is_mounted(fuse_device: &DevFuse) -> bool {
     use std::os::unix::io::AsFd;
     use std::slice;
@@ -304,7 +300,7 @@ fn is_mounted(fuse_device: &DevFuse) -> bool {
 }
 
 /// Identical to [`is_mounted`], but for [`AsyncDevFuse`].
-#[cfg(fuser_mount_impl = "pure-rust-async")]
+#[cfg(feature = "async")]
 pub(crate) async fn is_mounted_async(fuse: &AsyncDevFuse) -> bool {
     use nix::poll::PollFd;
     use nix::poll::PollFlags;

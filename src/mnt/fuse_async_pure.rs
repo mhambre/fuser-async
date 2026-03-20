@@ -65,9 +65,7 @@ impl AsyncMountImpl {
         self.fuse_device = Some(file);
         self.auto_unmount_socket = sock
             .map(|sock| {
-                sock.set_nonblocking(true).map_err(|_| {
-                    io::Error::other("Failed to set non-blocking on auto unmount socket")
-                })?;
+                sock.set_nonblocking(true)?;
                 UnixStream::from_std(sock)
             })
             .transpose()?;
@@ -95,18 +93,17 @@ impl AsyncMountImpl {
 
     /// Unmount the filesystem. This is a no-op if the filesystem is already unmounted.
     pub(crate) async fn umount_impl(&mut self) -> io::Result<()> {
-        let Some(fuse_device) = &self.fuse_device else {
-            // If fuse_device is not set, it means the mount was done via fusermount with auto unmount.
-            // In this case, we can just drop the auto_unmount_socket to trigger unmount.
-            if let Some(sock) = self.auto_unmount_socket.take() {
-                drop(sock);
-            }
-            return Ok(());
-        };
-
         // Prevent unmount race (no-op)
-        if !is_mounted_async(fuse_device).await {
-            return Ok(());
+        if let Some(fuse_device) = &self.fuse_device {
+            if !is_mounted_async(fuse_device).await {
+                return Ok(());
+            }
+        }
+
+        // If fuse_device is not set, it means the mount was done via fusermount with auto unmount.
+        // In this case, we can just drop the auto_unmount_socket to trigger unmount.
+        if let Some(sock) = self.auto_unmount_socket.take() {
+            drop(sock);
         }
 
         let mountpoint = self.mountpoint.clone();
@@ -125,7 +122,7 @@ impl AsyncMountImpl {
     }
 
     /// Unmount the filesystem. This is a no-op if the filesystem is already unmounted.
-    pub(crate) async fn umount_impl_sync(mut self) -> io::Result<()> {
+    pub(crate) fn umount_impl_sync(mut self) -> io::Result<()> {
         if let Some(tx) = self.unmount_tx.take() {
             // Signal the async unmount task to proceed with unmounting.
             let _ = tx.send(self);
