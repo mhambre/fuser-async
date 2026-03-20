@@ -7,9 +7,9 @@ use tokio::io;
 
 use crate::Config;
 
-/// Async filesystem trait. This is the async version of `Filesystem`. It follows a more
+/// Async filesystem trait. This is the async version of [`crate::Filesystem`]. It follows a more
 /// Rust-idiomatic async API design rather than the C-like, callback-based interface used
-/// by `Filesystem`. It is not intended to be a thin wrapper over that API.
+/// by [`crate::Filesystem`]. It is not intended to be a thin wrapper over that API.
 ///
 /// Instead of callbacks, this uses a call request -> return result response model, which allows
 /// for more straightforward control flow and improved error handling.
@@ -17,7 +17,7 @@ use crate::Config;
 /// Internally, it operates on an async-aware wrapper ([AsyncFD](https://docs.rs/tokio/latest/tokio/io/unix/struct.AsyncFd.html)) around the FUSE device, enabling
 /// better integration and performance with async runtimes.
 ///
-/// For the majority of use cases, users should prefer the `Filesystem` API. It is more
+/// For the majority of use cases, users should prefer the [`crate::Filesystem`] API. It is more
 /// stable and generally performs better in typical scenarios where the primary bottleneck
 /// is the kernel round-trip.
 ///

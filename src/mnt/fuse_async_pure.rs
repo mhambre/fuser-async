@@ -1,5 +1,4 @@
-//! Async wrapper for FUSE mounting and unmounting using the pure Rust implementation. This is used
-//! by the "async" feature.
+//! Async wrapper for FUSE mounting and unmounting using the pure Rust implementation.
 //!
 //! We accept that micro-optimizations are possible with this implementation, however, since the a lot of the
 //! lower level FUSE interactions are still blocking, effort into this would be premature. As such the main
@@ -21,7 +20,7 @@ use crate::mnt::fuse_pure;
 use crate::mnt::is_mounted_async;
 use crate::mnt::mount_options::MountOption;
 
-/// Inner implementation of the async mount. This is held by `AsyncMount` and `AsyncSession` to
+/// Inner implementation of the async mount. This is held by [`super::AsyncMount`] and [`crate::session_async::AsyncSession`] to
 /// manage the actual mount (file descriptor) lifecycle.
 #[derive(Debug)]
 pub(crate) struct AsyncMountImpl {
@@ -140,7 +139,8 @@ impl AsyncMountImpl {
         Ok(())
     }
 
-    /// Get a reference to the underlying `AsyncDevFuse`. This will return `None` if the filesystem is not yet mounted.
+    /// Get a reference to the underlying [`AsyncDevFuse`]. This will return `None` if the
+    /// filesystem is not yet mounted.
     pub(crate) fn dev_fuse(&self) -> Option<&Arc<AsyncDevFuse>> {
         self.fuse_device.as_ref()
     }

@@ -170,7 +170,7 @@ impl Drop for Mount {
     }
 }
 
-/// Async version of `Mount`. This is only supported with the "async" feature, and is not yet
+/// Async version of [`Mount`]. This is only supported with the "async" feature, and is not yet
 /// considered stable.
 #[cfg(feature = "async")]
 #[derive(Debug)]
@@ -181,7 +181,8 @@ pub(crate) struct AsyncMount {
 
 #[cfg(feature = "async")]
 impl AsyncMount {
-    /// Create a new AsyncMount. This does not actually mount the filesystem, call `AsyncMount::mount` to do that.
+    /// Create a new AsyncMount. This does not actually mount the filesystem, call [`AsyncMount::mount`] to
+    /// do that.
     pub(crate) fn new() -> AsyncMount {
         AsyncMount {
             mount_impl: None,
@@ -207,7 +208,8 @@ impl AsyncMount {
         return Ok(self);
     }
 
-    /// Non-blocking unmount. Prefer this over `Drop` for async mounts, since `Drop` will block the current thread.
+    /// Non-blocking unmount. Prefer this over [`Drop`] for async mounts, since [`Drop`] will block the
+    /// current thread.
     pub(crate) async fn umount(mut self) -> tokio::io::Result<()> {
         match self.mount_impl.take() {
             Some(mut mount) => {
@@ -218,7 +220,8 @@ impl AsyncMount {
         }
     }
 
-    /// Get a reference to the underlying `AsyncDevFuse`. This will return `None` if the filesystem is not yet mounted.
+    /// Get a reference to the underlying [`AsyncDevFuse`]. This will return `None` if the filesystem is
+    /// not yet mounted.
     pub(crate) fn dev_fuse(&self) -> Option<&Arc<AsyncDevFuse>> {
         self.mount_impl.as_ref().and_then(|m| m.dev_fuse())
     }
@@ -226,8 +229,8 @@ impl AsyncMount {
 
 #[cfg(feature = "async")]
 impl Drop for AsyncMount {
-    /// RAII unmount. Note that this will block the current thread, so it's recommended to call `umount`
-    /// explicitly instead of relying on this.
+    /// RAII unmount. Note that this will block the current thread, so it's recommended to call
+    /// [`AsyncMount::umount`] explicitly instead of relying on this.
     fn drop(&mut self) {
         if let Some(mut mount) = self.mount_impl.take() {
             if let Err(err) = tokio::task::block_in_place(|| {
@@ -300,7 +303,7 @@ fn is_mounted(fuse_device: &DevFuse) -> bool {
     }
 }
 
-/// Identical to `is_mounted`, but for `AsyncDevFuse`. This is used by the async Rust mount implementation.
+/// Identical to [`is_mounted`], but for [`AsyncDevFuse`].
 #[cfg(fuser_mount_impl = "pure-rust-async")]
 pub(crate) async fn is_mounted_async(fuse: &AsyncDevFuse) -> bool {
     use nix::poll::PollFd;

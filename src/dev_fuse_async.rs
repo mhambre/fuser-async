@@ -3,7 +3,7 @@ use std::os::fd::AsRawFd;
 use std::os::fd::BorrowedFd;
 use tokio::io::unix::AsyncFd;
 
-/// AsyncFD `File` wrapper that represents the `/dev/fuse` device.
+/// AsyncFD [`std::fs::File`] wrapper that represents the `/dev/fuse` device.
 #[derive(Debug)]
 pub(crate) struct AsyncDevFuse(pub(crate) AsyncFd<std::fs::File>);
 
@@ -32,7 +32,7 @@ impl AsyncDevFuse {
         Ok(Self(async_fd))
     }
 
-    /// Creates an `AsyncFD` from an existing file.
+    /// Creates an [`AsyncFd`] from an existing file.
     pub(crate) fn from_file(file: std::fs::File) -> tokio::io::Result<Self> {
         let async_fd = AsyncFd::new(file)?;
         Ok(Self(async_fd))
