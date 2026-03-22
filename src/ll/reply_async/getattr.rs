@@ -26,12 +26,6 @@ impl GetAttrResponse {
 
 impl Response for GetAttrResponse {
     fn payload(&self) -> impl IosliceConcat {
-        ResponseStruct::new_entry(
-            self.attr.ino,
-            Generation(0),
-            &Attr::from(self.attr),
-            self.ttl,
-            self.ttl,
-        )
+        ResponseStruct::new_attr(&self.ttl, &Attr::from(self.attr))
     }
 }
