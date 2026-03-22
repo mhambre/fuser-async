@@ -56,9 +56,11 @@ impl AsyncMountImpl {
             fuse_pure::fuse_mount_pure(mountpoint.as_os_str(), &options, acl)
         })
         .await
-        .map_err(|_err| io::Error::other("blocking task panicked"))??;
+        .map_err(|_err| io::Error::other("blocking task panicked"))?
+        .map_err(|e| io::Error::new(e.kind(), format!("fuse_mount_pure: {e}")))?;
 
-        let async_device = AsyncDevFuse::from_file(device.0)?;
+        let async_device = AsyncDevFuse::from_file(device.0)
+            .map_err(|e| io::Error::new(e.kind(), format!("AsyncDevFuse::from_file: {e}")))?;
         let file = Arc::new(async_device);
         let (tx, rx) = tokio::sync::oneshot::channel();
 

@@ -1,4 +1,6 @@
 use std::io::IoSlice;
+#[cfg(feature = "async")]
+use std::pin::Pin;
 
 use smallvec::SmallVec;
 
@@ -22,6 +24,16 @@ pub(crate) trait IosliceConcat {
         };
         let v = SmallVec::<[IoSlice<'_>; 3]>::from_iter([x0, x1, x2].into_iter().chain(iter));
         f(v.as_slice())
+    }
+
+    #[cfg(feature = "async")]
+    async fn with_ioslice_async<F, R>(&self, f: F) -> R
+    where
+        F: for<'b> FnOnce(&'b [IoSlice<'b>]) -> Pin<Box<dyn Future<Output = R> + 'b>>,
+    {
+        let owned: SmallVec<[Vec<u8>; 4]> = self.iter_slices().map(|s| s.to_vec()).collect();
+        let v: SmallVec<[IoSlice<'_>; 4]> = owned.iter().map(|s| IoSlice::new(s)).collect();
+        f(v.as_slice()).await
     }
 }
 
