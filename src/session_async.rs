@@ -289,12 +289,9 @@ impl<FS: AsyncFilesystem> AsyncSession<FS> {
                 .await
                 .map_err(|e| io::Error::new(e.kind(), format!("fs.init: {e}")))?;
             self.proto_version = Some(v);
-            sender
-                .send(
-                    &init.reply(&config).payload().ok_or_else(|| {
-                        io::Error::new(io::ErrorKind::Other, "Failed to get payload")
-                    })?,
-                )
+            let response = init.reply(&config);
+            response
+                .send_reply(&sender, request.unique())
                 .await
                 .map_err(|e| io::Error::new(e.kind(), format!("send init reply: {e}")))?;
             return Ok(());
