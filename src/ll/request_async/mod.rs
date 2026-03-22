@@ -131,6 +131,7 @@ impl<'a> AsyncRequestWithSender<'a> {
                         self.request_header(),
                         self.request.nodeid(),
                         x.file_handle(),
+                        x.size(),
                         x.offset(),
                     )
                     .await?,
