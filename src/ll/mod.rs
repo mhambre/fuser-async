@@ -7,7 +7,11 @@ pub(crate) mod ioctl;
 pub(crate) mod ioslice_concat;
 pub(crate) mod notify;
 pub(crate) mod reply;
+#[cfg(feature = "async")]
+pub mod reply_async;
 pub(crate) mod request;
+#[cfg(feature = "async")]
+pub(crate) mod request_async;
 
 use std::num::NonZeroI32;
 use std::time::SystemTime;
