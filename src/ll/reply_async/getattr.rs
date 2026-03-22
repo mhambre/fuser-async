@@ -4,7 +4,6 @@
 use std::time::Duration;
 
 use crate::FileAttr;
-use crate::Generation;
 use crate::ll::ResponseStruct;
 use crate::ll::ioslice_concat::IosliceConcat;
 use crate::ll::reply::Attr;

@@ -126,13 +126,14 @@ impl AsyncFilesystem for HelloFS {
         _context: &Request,
         ino: INodeNo,
         _file_handle: FileHandle,
+        size: u32,
         offset: u64,
     ) -> Result<DirectoryResponse, Errno> {
         if ino != INodeNo::ROOT {
             return Err(Errno::ENOENT);
         }
 
-        let mut response = DirectoryResponse::new(3);
+        let mut response = DirectoryResponse::new(size as usize);
         let entries = vec![
             (1, FileType::Directory, "."),
             (1, FileType::Directory, ".."),

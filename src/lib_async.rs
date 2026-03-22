@@ -80,6 +80,7 @@ pub trait AsyncFilesystem: Send + Sync + 'static {
         context: &Request,
         ino: INodeNo,
         file_handle: FileHandle,
+        size: u32,
         offset: u64,
     ) -> Result<DirectoryResponse, Errno>;
 }
