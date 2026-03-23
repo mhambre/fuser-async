@@ -51,8 +51,6 @@ pub use crate::ll::request::FileHandle;
 pub use crate::ll::request::INodeNo;
 pub use crate::ll::request::LockOwner;
 pub use crate::ll::request::Version;
-#[cfg(feature = "async")]
-pub use crate::mnt::mount_options::AsyncConfig;
 pub use crate::mnt::mount_options::Config;
 pub use crate::mnt::mount_options::MountOption;
 pub use crate::notify::Notifier;

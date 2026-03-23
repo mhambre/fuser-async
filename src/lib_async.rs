@@ -7,7 +7,7 @@ use std::path::Path;
 use tokio::io;
 
 use crate::{
-    AsyncConfig, Errno, FileHandle, INodeNo, KernelConfig, LockOwner, OpenFlags, Request,
+    Config, Errno, FileHandle, INodeNo, KernelConfig, LockOwner, OpenFlags, Request,
     ll::reply_async::{DirectoryResponse, GetAttrResponse, LookupResponse},
     reply_async::ReadResponse,
     session_async::AsyncSessionBuilder,
@@ -94,7 +94,7 @@ pub trait AsyncFilesystem: Send + Sync + 'static {
 pub async fn mount_async<FS: AsyncFilesystem, P: AsRef<Path>>(
     filesystem: FS,
     mountpoint: P,
-    options: &AsyncConfig,
+    options: &Config,
 ) -> io::Result<()> {
     let session = AsyncSessionBuilder::new()
         .filesystem(filesystem)

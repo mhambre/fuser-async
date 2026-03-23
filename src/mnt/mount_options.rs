@@ -20,17 +20,6 @@ pub struct Config {
     pub clone_fd: bool,
 }
 
-/// Fuser [`crate::AsyncSession`] configuration, including mount options.
-#[cfg(feature = "async")]
-#[derive(Debug, Clone, Default, Eq, PartialEq)]
-#[non_exhaustive]
-pub struct AsyncConfig {
-    /// Mount options.
-    pub mount_options: Vec<MountOption>,
-    /// Who can access the filesystem.
-    pub acl: SessionACL,
-}
-
 /// Mount options accepted by the FUSE filesystem type
 /// See 'man mount.fuse' for details
 // TODO: add all options that 'man mount.fuse' documents and libfuse supports
@@ -118,15 +107,7 @@ pub(crate) enum MountOptionGroup {
 }
 
 pub(crate) fn check_option_conflicts(config: &Config) -> Result<(), io::Error> {
-    check_conflicts_helper(&config.mount_options)
-}
-
-#[cfg(feature = "async")]
-pub(crate) fn check_async_option_conflicts(config: &AsyncConfig) -> Result<(), io::Error> {
-    check_conflicts_helper(&config.mount_options)
-}
-
-fn check_conflicts_helper(options: &[MountOption]) -> Result<(), io::Error> {
+    let options = &config.mount_options;
     let mut options_set = HashSet::new();
     options_set.extend(options.iter().cloned());
     let conflicting: HashSet<MountOption> = options.iter().flat_map(conflicts_with).collect();
