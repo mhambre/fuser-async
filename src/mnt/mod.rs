@@ -198,9 +198,8 @@ impl AsyncMount {
         acl: SessionACL,
     ) -> tokio::io::Result<Self> {
         self.mount_point = mountpoint.to_path_buf();
-        let uninit_mount = fuse_async_pure::AsyncMountImpl::new(mountpoint).map_err(|e| {
-            tokio::io::Error::new(e.kind(), format!("AsyncMountImpl::new: {e}"))
-        })?;
+        let uninit_mount = fuse_async_pure::AsyncMountImpl::new(mountpoint)
+            .map_err(|e| tokio::io::Error::new(e.kind(), format!("AsyncMountImpl::new: {e}")))?;
         self.mount_impl = Some(
             uninit_mount
                 .mount_impl(options, acl)

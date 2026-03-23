@@ -58,6 +58,7 @@ pub(crate) struct MountImpl {
     auto_unmount_socket: Option<UnixStream>,
     fuse_device: Arc<DevFuse>,
 }
+
 impl MountImpl {
     pub(crate) fn new(
         mountpoint: &Path,

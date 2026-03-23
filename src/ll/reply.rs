@@ -5,8 +5,6 @@ use std::future::Future;
 use std::io::IoSlice;
 use std::os::unix::prelude::OsStrExt;
 use std::path::Path;
-#[cfg(feature = "async")]
-use std::pin::Pin;
 use std::time::Duration;
 #[cfg(target_os = "macos")]
 use std::time::SystemTime;
@@ -38,7 +36,7 @@ pub(crate) trait Response {
         None
     }
 
-    fn payload(&self) -> impl IosliceConcat;
+    fn payload(&self) -> impl IosliceConcat + Send;
 
     fn with_iovec<F: FnOnce(&[IoSlice<'_>]) -> T, T>(&self, unique: RequestId, f: F) -> T {
         let payload = self.payload();
@@ -55,35 +53,29 @@ pub(crate) trait Response {
     }
 
     #[cfg(feature = "async")]
-    async fn with_iovec_async<F, T>(&self, unique: RequestId, f: F) -> T
-    where
-        F: for<'b> FnOnce(&'b [IoSlice<'b>]) -> Pin<Box<dyn Future<Output = T> + 'b>>,
-    {
-        let payload = self.payload();
-        let payload_len = payload.sum_len();
-        let header = abi::fuse_out_header {
-            unique: unique.0,
-            error: self.errno().map_or(0, |e| -e.0.get()),
-            len: (size_of::<abi::fuse_out_header>() + payload_len)
-                .try_into()
-                .expect("Too much data"),
-        };
-        let header_bytes = header.as_bytes().to_vec();
-        let v = ([IoSlice::new(&header_bytes)], payload);
-        IosliceConcat::with_ioslice_async(&v, f).await
-    }
-
-    #[cfg(feature = "async")]
-    async fn send_reply(
-        &self,
-        sender: &AsyncChannelSender,
+    fn send_reply<'a>(
+        &'a self,
+        sender: &'a AsyncChannelSender,
         unique: RequestId,
-    ) -> Result<(), tokio::io::Error> {
-        self.with_iovec_async(unique, move |iov| {
-            let sender = sender.clone();
-            Box::pin(async move { sender.send(iov).await })
-        })
-        .await
+    ) -> impl Future<Output = Result<(), tokio::io::Error>> + Send + 'a
+    where
+        Self: Sync,
+    {
+        async move {
+            let payload = self.payload();
+            let payload_len = payload.sum_len();
+            let header = abi::fuse_out_header {
+                unique: unique.0,
+                error: self.errno().map_or(0, |e| -e.0.get()),
+                len: (size_of::<abi::fuse_out_header>() + payload_len)
+                    .try_into()
+                    .expect("Too much data"),
+            };
+            let mut iov = SmallVec::<[IoSlice<'_>; 4]>::new();
+            iov.push(IoSlice::new(header.as_bytes()));
+            iov.extend(payload.iter_slices());
+            sender.send(iov.as_slice()).await
+        }
     }
 }
 

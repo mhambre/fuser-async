@@ -1,7 +1,5 @@
 use std::path::PathBuf;
 
-#[cfg(feature = "async")]
-use fuser::AsyncConfig;
 use fuser::Config;
 use fuser::MountOption;
 use fuser::SessionACL;
@@ -45,23 +43,6 @@ impl CommonArgs {
         }
         config.n_threads = Some(self.n_threads);
         config.clone_fd = self.clone_fd;
-        config
-    }
-
-    #[cfg(feature = "async")]
-    pub fn async_config(&self) -> AsyncConfig {
-        let mut config = AsyncConfig::default();
-        if self.auto_unmount {
-            config.mount_options.push(MountOption::AutoUnmount);
-        }
-        if self.allow_root {
-            config.acl = SessionACL::RootAndOwner;
-        }
-        if config.mount_options.contains(&MountOption::AutoUnmount)
-            && config.acl != SessionACL::RootAndOwner
-        {
-            config.acl = SessionACL::All;
-        }
         config
     }
 }

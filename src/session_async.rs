@@ -15,7 +15,7 @@ use log::warn;
 use nix::unistd::Uid;
 use nix::unistd::geteuid;
 
-use crate::AsyncConfig;
+use crate::Config;
 use crate::KernelConfig;
 use crate::MountOption;
 use crate::Request;
@@ -29,7 +29,7 @@ use crate::ll::fuse_abi as abi;
 use crate::ll::reply::Response;
 use crate::ll::request_async::AsyncRequestWithSender;
 use crate::mnt::AsyncMount;
-use crate::mnt::mount_options::check_async_option_conflicts;
+use crate::mnt::mount_options::check_option_conflicts;
 use crate::read_buf::FuseReadBuf;
 use crate::session::MAX_WRITE_SIZE;
 use parking_lot::Mutex;
@@ -68,7 +68,7 @@ impl<FS: AsyncFilesystem> Drop for AsyncSessionGuard<FS> {
 pub struct AsyncSessionBuilder<FS: AsyncFilesystem> {
     filesystem: Option<FS>,
     mountpoint: Option<String>,
-    options: Option<AsyncConfig>,
+    options: Option<Config>,
 }
 
 impl<FS: AsyncFilesystem> AsyncSessionBuilder<FS> {
@@ -94,8 +94,8 @@ impl<FS: AsyncFilesystem> AsyncSessionBuilder<FS> {
     }
 
     /// Set the options for this session. This is required.
-    pub fn options(mut self, options: AsyncConfig) -> io::Result<Self> {
-        check_async_option_conflicts(&options)?;
+    pub fn options(mut self, options: Config) -> io::Result<Self> {
+        check_option_conflicts(&options)?;
 
         // validate permissions options
         if options.mount_options.contains(&MountOption::AutoUnmount)
@@ -144,7 +144,7 @@ pub struct AsyncSession<FS: AsyncFilesystem> {
     pub(crate) proto_version: Option<Version>,
     /// Config options for this session, used for debugging and for
     /// feature gating in the future.
-    pub(crate) config: AsyncConfig,
+    pub(crate) config: Config,
 }
 
 /// A session that is running in the background. The filesystem is unmounted when
@@ -163,7 +163,7 @@ impl<FS: AsyncFilesystem> AsyncSession<FS> {
     async fn init<P: AsRef<Path>>(
         filesystem: FS,
         mountpoint: P,
-        options: &AsyncConfig,
+        options: &Config,
     ) -> io::Result<Self> {
         let mountpoint = mountpoint.as_ref();
 
@@ -222,19 +222,71 @@ impl<FS: AsyncFilesystem> AsyncSession<FS> {
             allowed,
             session_owner,
             proto_version: _,
-            config: _,
+            config,
         } = self;
 
-        let filesystem = Arc::new(guard);
-        let event_loop = AsyncSessionEventLoop {
-            thread_name: "fuser-async-0".to_string(),
-            filesystem,
-            ch,
-            allowed,
-            session_owner,
+        let n_threads = config.n_threads.unwrap_or(1);
+        if n_threads == 0 {
+            return Err(io::Error::other("n_threads"));
+        }
+        let Some(n_threads_minus_one) = n_threads.checked_sub(1) else {
+            return Err(io::Error::other("n_threads"));
         };
 
-        event_loop.event_loop().await
+        let filesystem = Arc::new(guard);
+
+        // Give each individual thread its own channel by cloning or using `FUSE_DEV_IOC_CLONE` if requested,
+        // which allows for more efficient request processing when multiple threads are used.
+        let mut channels = Vec::with_capacity(n_threads);
+        for _ in 0..n_threads_minus_one {
+            if config.clone_fd {
+                #[cfg(target_os = "linux")]
+                {
+                    channels.push(ch._clone_fd().await?);
+                    continue;
+                }
+                #[cfg(not(target_os = "linux"))]
+                {
+                    return Err(io::Error::other("clone_fd is only supported on Linux"));
+                }
+            } else {
+                channels.push(ch.clone());
+            }
+        }
+        channels.push(ch);
+
+        // Construct the event loop for each thread.
+        let mut tasks = Vec::with_capacity(n_threads);
+        for (i, ch) in channels.into_iter().enumerate() {
+            let thread_name = format!("fuser-async-{i}");
+            let event_loop = AsyncSessionEventLoop {
+                thread_name: thread_name.clone(),
+                filesystem: filesystem.clone(),
+                ch,
+                allowed,
+                session_owner,
+            };
+            tasks.push(tokio::spawn(async move { event_loop.event_loop().await }));
+        }
+
+        // Wait for all event loop tasks to finish (shouldn't happen), and return the first error
+        // if any of them fail.
+        let mut reply: io::Result<()> = Ok(());
+        for task in tasks {
+            let res = match task.await {
+                Ok(res) => res,
+                Err(_) => {
+                    return Err(io::Error::other("event loop task panicked"));
+                }
+            };
+            if let Err(e) = res {
+                if reply.is_ok() {
+                    reply = Err(e);
+                }
+            }
+        }
+
+        reply
     }
 
     /// Perform the initial handshake with the kernel, which involves receiving the init message,
@@ -308,6 +360,18 @@ pub(crate) struct AsyncSessionEventLoop<FS: AsyncFilesystem> {
     pub(crate) session_owner: Uid,
 }
 
+impl<FS: AsyncFilesystem> Clone for AsyncSessionEventLoop<FS> {
+    fn clone(&self) -> Self {
+        Self {
+            thread_name: self.thread_name.clone(),
+            ch: self.ch.clone(),
+            filesystem: self.filesystem.clone(),
+            allowed: self.allowed,
+            session_owner: self.session_owner,
+        }
+    }
+}
+
 impl<FS: AsyncFilesystem> AsyncSessionEventLoop<FS> {
     async fn event_loop(&self) -> io::Result<()> {
         let mut buf = FuseReadBuf::new();
@@ -316,8 +380,11 @@ impl<FS: AsyncFilesystem> AsyncSessionEventLoop<FS> {
         loop {
             let resp_size = self.ch.receive_retrying(buf).await?;
             let sender = self.ch.sender();
+            let session = self.clone();
             if let Ok(request) = AsyncRequestWithSender::new(sender, &buf[..resp_size]) {
-                request.dispatch(self).await;
+                tokio::spawn(async move {
+                    request.dispatch(&session).await;
+                });
             } else {
                 warn!("Received invalid request, skipping...");
             }
