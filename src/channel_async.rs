@@ -1,3 +1,4 @@
+use log::error;
 use std::os::fd::AsFd;
 use std::os::fd::BorrowedFd;
 use std::sync::Arc;
@@ -76,7 +77,7 @@ impl AsyncChannel {
     ///
     /// Requires Linux 4.5+. Returns an error on older kernels or non-Linux.
     #[cfg(target_os = "linux")]
-    pub(crate) async fn clone_fd(&self) -> tokio::io::Result<AsyncChannel> {
+    pub(crate) async fn _clone_fd(&self) -> tokio::io::Result<AsyncChannel> {
         // FUSE_DEV_IOC_CLONE requires a fresh /dev/fuse fd as the target.
 
         use std::os::fd::AsRawFd;
@@ -104,8 +105,11 @@ impl AsyncChannelSender {
     pub(crate) async fn send(&self, bufs: &[std::io::IoSlice<'_>]) -> tokio::io::Result<()> {
         loop {
             let mut guard = self.0.0.writable().await?;
+
             match guard.try_io(|inner| {
-                nix::sys::uio::writev(inner.get_ref(), bufs).map_err(tokio::io::Error::from)
+                nix::sys::uio::writev(inner.get_ref(), bufs)
+                    .inspect_err(|e| error!("Error writing to FUSE device: {e:?}"))
+                    .map_err(tokio::io::Error::from)
             }) {
                 Ok(rc) => {
                     debug_assert_eq!(bufs.iter().map(|b| b.len()).sum::<usize>(), rc?);
@@ -114,13 +118,5 @@ impl AsyncChannelSender {
                 Err(_would_block) => continue,
             }
         }
-    }
-}
-
-/// Converts an [`tokio::io::Error`] into a [`nix::errno::Errno`], using the raw OS error code if available
-pub(crate) fn errno_from_io(err: tokio::io::Error) -> nix::errno::Errno {
-    match err.raw_os_error() {
-        Some(code) => nix::errno::Errno::from_raw(code),
-        None => nix::errno::Errno::EIO,
     }
 }
