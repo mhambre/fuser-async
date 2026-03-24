@@ -7,9 +7,9 @@ use std::path::Path;
 use tokio::io;
 
 use crate::{
-    Config, Errno, FileHandle, INodeNo, KernelConfig, LockOwner, OpenFlags, Request,
+    Config, Errno, FileHandle, INodeNo, KernelConfig, LockOwner, OpenFlags, Request, WriteFlags,
     ll::reply_async::{DirectoryResponse, GetAttrResponse, LookupResponse},
-    reply_async::ReadResponse,
+    reply_async::{ReadResponse, WriteResponse},
     session_async::AsyncSessionBuilder,
 };
 
@@ -83,6 +83,31 @@ pub trait AsyncFilesystem: Send + Sync + 'static {
         size: u32,
         offset: u64,
     ) -> Result<DirectoryResponse, Errno>;
+
+    /// Write data.
+    ///
+    /// Write should return exactly the number of bytes requested except on error. An
+    /// exception to this is when the file has been opened in `direct_io` mode, in
+    /// which case the return value of the write system call will reflect the return
+    /// value of this operation. fh will contain the value set by the open method, or
+    /// will be undefined if the open method didn't set any value.
+    ///
+    /// `write_flags`: will contain `FUSE_WRITE_CACHE`, if this write is from the page cache. If set,
+    /// the pid, uid, gid, and fh may not match the value that would have been sent if write cachin
+    /// is disabled
+    /// flags: these are the file flags, such as `O_SYNC`. Only supported with ABI >= 7.9
+    /// `lock_owner`: only supported with ABI >= 7.9
+    async fn write(
+        &self,
+        req: &Request,
+        ino: INodeNo,
+        fh: FileHandle,
+        offset: u64,
+        data: &[u8],
+        write_flags: WriteFlags,
+        flags: OpenFlags,
+        lock_owner: Option<LockOwner>,
+    ) -> Result<WriteResponse, Errno>;
 }
 
 /// Mount the given async filesystem to the given mountpoint. This function will

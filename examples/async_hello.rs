@@ -155,7 +155,7 @@ async fn main() {
     let args = Args::parse();
     env_logger::init();
 
-    let mut cfg = args.common_args.async_config();
+    let mut cfg = args.common_args.config();
     cfg.mount_options
         .extend([MountOption::RO, MountOption::FSName("hello".to_string())]);
     fuser::mount_async(HelloFS, &args.common_args.mount_point, &cfg)

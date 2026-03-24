@@ -242,7 +242,7 @@ impl<FS: AsyncFilesystem> AsyncSession<FS> {
             if config.clone_fd {
                 #[cfg(target_os = "linux")]
                 {
-                    channels.push(ch._clone_fd().await?);
+                    channels.push(ch.clone_fd().await?);
                     continue;
                 }
                 #[cfg(not(target_os = "linux"))]
@@ -354,8 +354,8 @@ impl<FS: AsyncFilesystem> AsyncSession<FS> {
 pub(crate) struct AsyncSessionEventLoop<FS: AsyncFilesystem> {
     /// Cache thread name for faster `debug!`.
     pub(crate) thread_name: String,
-    pub(crate) ch: AsyncChannel,
     pub(crate) filesystem: Arc<AsyncSessionGuard<FS>>,
+    pub(crate) ch: AsyncChannel,
     pub(crate) allowed: SessionACL,
     pub(crate) session_owner: Uid,
 }
@@ -364,8 +364,8 @@ impl<FS: AsyncFilesystem> Clone for AsyncSessionEventLoop<FS> {
     fn clone(&self) -> Self {
         Self {
             thread_name: self.thread_name.clone(),
-            ch: self.ch.clone(),
             filesystem: self.filesystem.clone(),
+            ch: self.ch.clone(),
             allowed: self.allowed,
             session_owner: self.session_owner,
         }

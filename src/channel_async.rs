@@ -77,7 +77,7 @@ impl AsyncChannel {
     ///
     /// Requires Linux 4.5+. Returns an error on older kernels or non-Linux.
     #[cfg(target_os = "linux")]
-    pub(crate) async fn _clone_fd(&self) -> tokio::io::Result<AsyncChannel> {
+    pub(crate) async fn clone_fd(&self) -> tokio::io::Result<AsyncChannel> {
         // FUSE_DEV_IOC_CLONE requires a fresh /dev/fuse fd as the target.
 
         use std::os::fd::AsRawFd;
