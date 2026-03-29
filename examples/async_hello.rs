@@ -114,7 +114,8 @@ impl AsyncFilesystem for HelloFS {
     ) -> Result<ReadResponse, Errno> {
         if ino.0 == 2 {
             Ok(ReadResponse::new(
-                HELLO_TXT_CONTENT.as_bytes()[offset as usize..].to_vec(),
+                HELLO_TXT_CONTENT.as_bytes()[offset.min(HELLO_TXT_CONTENT.len() as u64) as usize..]
+                    .to_vec(),
             ))
         } else {
             Err(Errno::ENOENT)

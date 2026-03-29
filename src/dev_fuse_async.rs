@@ -49,7 +49,7 @@ impl AsyncDevFuse {
 
 /// Helper function to set a [`std::fs::File`] descriptor to non-blocking mode. This is required for
 /// the FUSE device to work properly with async runtimes.
-fn set_nonblocking(file: &std::fs::File) -> tokio::io::Result<()> {
+pub(crate) fn set_nonblocking(file: &std::fs::File) -> tokio::io::Result<()> {
     let flags = fcntl(file, FcntlArg::F_GETFL).map_err(tokio::io::Error::from)?;
     let mut oflags = OFlag::from_bits_retain(flags);
     oflags.insert(OFlag::O_NONBLOCK);

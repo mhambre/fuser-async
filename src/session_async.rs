@@ -1,4 +1,4 @@
-//! Filesystem session
+//! Async filesystem session
 //!
 //! A session runs a filesystem implementation while it is being mounted to a specific mount
 //! point. A session begins by mounting the filesystem and ends by unmounting it. While the
@@ -11,6 +11,7 @@ use std::os::fd::BorrowedFd;
 use std::path::Path;
 use std::sync::Arc;
 
+use log::error;
 use log::warn;
 use nix::unistd::Uid;
 use nix::unistd::geteuid;
@@ -224,6 +225,7 @@ impl<FS: AsyncFilesystem> AsyncSession<FS> {
             proto_version: _,
             config,
         } = self;
+        let mut filesystem = Arc::new(guard);
 
         let n_threads = config.n_threads.unwrap_or(1);
         if n_threads == 0 {
@@ -232,8 +234,11 @@ impl<FS: AsyncFilesystem> AsyncSession<FS> {
         let Some(n_threads_minus_one) = n_threads.checked_sub(1) else {
             return Err(io::Error::other("n_threads"));
         };
-
-        let filesystem = Arc::new(guard);
+        if !cfg!(target_os = "linux") && n_threads != 1 {
+            return Err(io::Error::other(
+                "multi-threaded async sessions are only supported on Linux",
+            ));
+        }
 
         // Give each individual thread its own channel by cloning or using `FUSE_DEV_IOC_CLONE` if requested,
         // which allows for more efficient request processing when multiple threads are used.
@@ -269,7 +274,7 @@ impl<FS: AsyncFilesystem> AsyncSession<FS> {
             tasks.push(tokio::spawn(async move { event_loop.event_loop().await }));
         }
 
-        // Wait for all event loop tasks to finish (shouldn't happen), and return the first error
+        // Wait for all event loop tasks to finish (shouldn't happen till unmount), and return the first error
         // if any of them fail.
         let mut reply: io::Result<()> = Ok(());
         for task in tasks {
@@ -285,6 +290,14 @@ impl<FS: AsyncFilesystem> AsyncSession<FS> {
                 }
             }
         }
+
+        // Clean up the filesystem
+        let Some(filesystem) = Arc::get_mut(&mut filesystem) else {
+            return Err(io::Error::other(
+                "BUG: must have one refcount for filesystem",
+            ));
+        };
+        filesystem.destroy();
 
         reply
     }
@@ -303,20 +316,47 @@ impl<FS: AsyncFilesystem> AsyncSession<FS> {
         // Keep checking for an init message from the kernel until we get one with a supported version,
         // at which point we reply to finish the handshake and return
         loop {
-            let size = self
-                .ch
-                .receive_retrying(&mut buf)
-                .await
-                .map_err(|e| io::Error::new(e.kind(), format!("receive_retrying: {e}")))?;
+            let size = match self.ch.receive_retrying(&mut buf).await {
+                Ok(size) => size,
+                Err(nix::errno::Errno::ENODEV) => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::NotConnected,
+                        "FUSE device disconnected during handshake",
+                    ));
+                }
+                Err(err) => return Err(err.into()),
+            };
             let request = AnyRequest::try_from(&buf[..size])
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
             // Convert the handshake request from the kernel to a usable operation
-            let Ok(ll::Operation::Init(init)) = request.operation() else {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "expected FUSE_INIT",
-                ));
+            let init = match request.operation() {
+                Ok(ll::Operation::Init(init)) => init,
+                Ok(_) => {
+                    error!("Received non-init FUSE operation before init: {}", request);
+                    ll::ResponseErrno(ll::Errno::EIO)
+                        .send_reply(&sender, request.unique())
+                        .await
+                        .map_err(|e| {
+                            io::Error::new(e.kind(), format!("send handshake error reply: {e}"))
+                        })?;
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "Received non-init FUSE operation during handshake",
+                    ));
+                }
+                Err(_) => {
+                    ll::ResponseErrno(ll::Errno::EIO)
+                        .send_reply(&sender, request.unique())
+                        .await
+                        .map_err(|e| {
+                            io::Error::new(e.kind(), format!("send handshake error reply: {e}"))
+                        })?;
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "Failed to parse FUSE operation",
+                    ));
+                }
             };
             let v = init.version();
 
@@ -328,18 +368,34 @@ impl<FS: AsyncFilesystem> AsyncSession<FS> {
                 continue;
             }
             if v < Version(7, 6) {
+                ll::ResponseErrno(ll::Errno::EPROTO)
+                    .send_reply(&sender, request.unique())
+                    .await
+                    .map_err(|e| {
+                        io::Error::new(e.kind(), format!("send handshake error reply: {e}"))
+                    })?;
                 return Err(io::Error::new(
                     io::ErrorKind::Unsupported,
-                    "FUSE ABI too old",
+                    format!("Unsupported FUSE ABI version {v}"),
                 ));
             }
 
             // Construct kernel config from the init message user init() implementation and reply with it to finish
             // the handshake
             let mut config = KernelConfig::new(init.capabilities(), init.max_readahead(), v);
-            fs.init(Request::ref_cast(request.header()), &mut config)
+            if let Err(error) = fs
+                .init(Request::ref_cast(request.header()), &mut config)
                 .await
-                .map_err(|e| io::Error::new(e.kind(), format!("fs.init: {e}")))?;
+            {
+                let errno = ll::Errno::from_i32(error.raw_os_error().unwrap_or(0));
+                ll::ResponseErrno(errno)
+                    .send_reply(&sender, request.unique())
+                    .await
+                    .map_err(|e| {
+                        io::Error::new(e.kind(), format!("send handshake error reply: {e}"))
+                    })?;
+                return Err(error);
+            }
             self.proto_version = Some(v);
             let response = init.reply(&config);
             response
@@ -378,7 +434,18 @@ impl<FS: AsyncFilesystem> AsyncSessionEventLoop<FS> {
         let buf = buf.as_mut();
 
         loop {
-            let resp_size = self.ch.receive_retrying(buf).await?;
+            let resp_size = match self.ch.receive_retrying(buf).await {
+                Ok(res) => res,
+                // Fs unmounted or session ended, exit the loop and end the thread
+                Err(nix::errno::Errno::ENODEV) => return Ok(()),
+                Err(err) => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("receive_retrying: {err:?}"),
+                    ));
+                }
+            };
+
             let sender = self.ch.sender();
             let session = self.clone();
             if let Ok(request) = AsyncRequestWithSender::new(sender, &buf[..resp_size]) {

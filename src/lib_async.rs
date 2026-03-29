@@ -1,9 +1,12 @@
 //! Experimental Asynchronous API for fuser. This is gated behind the "async" feature,
 //! and is not yet considered stable. The API may change without a major version bump.
 
+#![allow(unused_variables, unused_mut, clippy::too_many_arguments)]
+
 use std::ffi::OsStr;
 use std::path::Path;
 
+use log::warn;
 use tokio::io;
 
 use crate::{
@@ -49,7 +52,13 @@ pub trait AsyncFilesystem: Send + Sync + 'static {
         context: &Request,
         parent: INodeNo,
         name: &OsStr,
-    ) -> Result<LookupResponse, Errno>;
+    ) -> Result<LookupResponse, Errno> {
+        warn!(
+            "lookup not implemented for parent inode {}, name {:?}",
+            parent, name
+        );
+        Err(Errno::ENOTSUP)
+    }
 
     /// Get the attributes of an entry. This is called by the kernel when it needs to know the attributes of
     /// a file, either by inode number or by file handle (created on [`crate::AsyncFilesystem::open`]).
@@ -58,7 +67,10 @@ pub trait AsyncFilesystem: Send + Sync + 'static {
         context: &Request,
         ino: INodeNo,
         file_handle: Option<FileHandle>,
-    ) -> Result<GetAttrResponse, Errno>;
+    ) -> Result<GetAttrResponse, Errno> {
+        warn!("getattr not implemented for inode {}", ino);
+        Err(Errno::ENOTSUP)
+    }
 
     /// Return the data of a file. This is called by the kernel when it needs to read the contents
     /// of a file.
@@ -71,7 +83,13 @@ pub trait AsyncFilesystem: Send + Sync + 'static {
         size: u32,
         flags: OpenFlags,
         lock: Option<LockOwner>,
-    ) -> Result<ReadResponse, Errno>;
+    ) -> Result<ReadResponse, Errno> {
+        warn!(
+            "read not implemented for inode {}, offset {}, size {}",
+            ino, offset, size
+        );
+        Err(Errno::ENOTSUP)
+    }
 
     /// Construct a directory listing response for the given directory inode. This is called by
     /// the kernel when it needs to read the contents of a directory.
@@ -82,7 +100,13 @@ pub trait AsyncFilesystem: Send + Sync + 'static {
         file_handle: FileHandle,
         size: u32,
         offset: u64,
-    ) -> Result<DirectoryResponse, Errno>;
+    ) -> Result<DirectoryResponse, Errno> {
+        warn!(
+            "readdir not implemented for inode {}, offset {}, size {}",
+            ino, offset, size
+        );
+        Err(Errno::ENOTSUP)
+    }
 
     /// Write data.
     ///
@@ -107,7 +131,15 @@ pub trait AsyncFilesystem: Send + Sync + 'static {
         write_flags: WriteFlags,
         flags: OpenFlags,
         lock_owner: Option<LockOwner>,
-    ) -> Result<WriteResponse, Errno>;
+    ) -> Result<WriteResponse, Errno> {
+        warn!(
+            "write not implemented for inode {}, offset {}, size {}",
+            ino,
+            offset,
+            data.len()
+        );
+        Err(Errno::ENOTSUP)
+    }
 }
 
 /// Mount the given async filesystem to the given mountpoint. This function will
