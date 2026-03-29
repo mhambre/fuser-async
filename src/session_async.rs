@@ -6,8 +6,6 @@
 //! for filesystem operations under its mount point.
 
 use std::io;
-use std::os::fd::AsFd;
-use std::os::fd::BorrowedFd;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -146,14 +144,6 @@ pub struct AsyncSession<FS: AsyncFilesystem> {
     /// Config options for this session, used for debugging and for
     /// feature gating in the future.
     pub(crate) config: Config,
-}
-
-/// A session that is running in the background. The filesystem is unmounted when
-/// the session ends.
-impl<FS: AsyncFilesystem> AsFd for AsyncSession<FS> {
-    fn as_fd(&self) -> BorrowedFd<'_> {
-        self.ch.as_fd()
-    }
 }
 
 impl<FS: AsyncFilesystem> AsyncSession<FS> {
@@ -303,6 +293,8 @@ impl<FS: AsyncFilesystem> AsyncSession<FS> {
     }
 
     /// Perform the initial handshake with the kernel, which involves receiving the init message,
+    /// replying with the kernel config, and setting the protocol version for this session. This must be
+    /// called before any other communication with the kernel can be done.
     async fn handshake(&mut self) -> io::Result<()> {
         let mut buf = vec![0u8; MAX_WRITE_SIZE];
         let sender = self.ch.sender();

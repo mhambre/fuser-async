@@ -73,6 +73,9 @@ impl AsyncMountImpl {
             .transpose()?;
         self.unmount_tx = Some(tx);
 
+        // Spawn a background task to wait for unmount signal and perform unmounting. This allows us to unmount
+        // from a sync context (i.e. drop) by sending a signal to this task, which will then perform
+        // the async unmounting logic.
         tokio::spawn(async {
             // Wait for unmount signal
             let Ok(mut mount) = rx.await else {

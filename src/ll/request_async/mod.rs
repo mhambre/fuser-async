@@ -104,7 +104,10 @@ impl AsyncRequestWithSender {
                 error!("Unexpected FUSE_INIT after handshake completed");
                 Err(Errno::EIO)
             }
-            ll::Operation::Destroy(_) => Err(Errno::EIO),
+            ll::Operation::Destroy(_) => {
+                error!("Unexpected FUSE_DESTROY, session should have been cleaned up");
+                Err(Errno::EIO)
+            }
             ll::Operation::Lookup(x) => {
                 let response = filesystem
                     .lookup(self.request_header(), request.nodeid(), x.name().as_ref())

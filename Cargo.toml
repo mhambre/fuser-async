@@ -117,7 +117,3 @@ name = "passthrough"
 
 [[example]]
 name = "passthrough_fork"
-
-[[example]]
-name = "backend_bench"
-required-features = ["async", "experimental"]

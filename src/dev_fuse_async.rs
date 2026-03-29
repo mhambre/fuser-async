@@ -41,8 +41,8 @@ impl AsyncDevFuse {
     pub(crate) fn from_file(file: std::fs::File) -> tokio::io::Result<Self> {
         set_nonblocking(&file)
             .map_err(|e| tokio::io::Error::new(e.kind(), format!("set_nonblocking: {e}")))?;
-        let async_fd =
-            AsyncFd::new(file).map_err(|e| tokio::io::Error::new(e.kind(), format!("{e}")))?;
+        let async_fd = AsyncFd::new(file)
+            .map_err(|e| tokio::io::Error::new(e.kind(), format!("AsyncFd::new: {e}")))?;
         Ok(Self(async_fd))
     }
 }
