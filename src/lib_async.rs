@@ -7,11 +7,11 @@ use std::ffi::OsStr;
 use std::path::Path;
 use std::time::SystemTime;
 
-use log::warn;
+use log::{debug, warn};
 use tokio::io;
 
 use crate::{
-    AccessFlags, BsdFileFlags, Config, CopyFileRangeFlags, Errno, FileHandle, FopenFlags, INodeNo,
+    AccessFlags, BsdFileFlags, Config, CopyFileRangeFlags, Errno, FileHandle, INodeNo,
     KernelConfig, LockOwner, OpenFlags, RenameFlags, Request, TimeOrNow, WriteFlags,
     reply_async::{
         AttrResponse, CreateResponse, DataResponse, DirectoryResponse, EntryResponse,
@@ -80,7 +80,7 @@ pub trait AsyncFilesystem: Send + Sync + 'static {
     /// Forget about an inode. Internal only, the kernel is just making us aware for
     /// bookkeeping.
     async fn forget(&self, req: &Request, ino: INodeNo, nlookup: u64) {
-        warn!("forget not implemented for inode {}", ino);
+        debug!("forget not implemented for inode {}", ino);
     }
 
     /// Set file attributes.
@@ -219,7 +219,8 @@ pub trait AsyncFilesystem: Send + Sync + 'static {
         ino: INodeNo,
         flags: OpenFlags,
     ) -> Result<OpenResponse, Errno> {
-        Ok(OpenResponse::new(FileHandle(0), FopenFlags::empty()))
+        warn!("open not implemented for inode {}, flags {:?}", ino, flags);
+        Err(Errno::ENOTSUP)
     }
 
     /// Return the data of a file. This is called by the kernel when it needs to read the contents
@@ -284,7 +285,8 @@ pub trait AsyncFilesystem: Send + Sync + 'static {
         lock_owner: Option<LockOwner>,
         flush: bool,
     ) -> Result<(), Errno> {
-        Ok(())
+        warn!("release not implemented for inode {}, fh {:?}", ino, fh);
+        Err(Errno::ENOTSUP)
     }
 
     /// Open a directory.
@@ -294,7 +296,11 @@ pub trait AsyncFilesystem: Send + Sync + 'static {
         ino: INodeNo,
         flags: OpenFlags,
     ) -> Result<OpenResponse, Errno> {
-        Ok(OpenResponse::new(FileHandle(0), FopenFlags::empty()))
+        warn!(
+            "opendir not implemented for inode {}, flags {:?}",
+            ino, flags
+        );
+        Err(Errno::ENOTSUP)
     }
 
     /// Construct a directory listing response for the given directory inode. This is called by
@@ -322,12 +328,14 @@ pub trait AsyncFilesystem: Send + Sync + 'static {
         fh: FileHandle,
         flags: OpenFlags,
     ) -> Result<(), Errno> {
-        Ok(())
+        warn!("releasedir not implemented for inode {}, fh {:?}", ino, fh);
+        Err(Errno::ENOTSUP)
     }
 
     /// Get file system statistics.
     async fn statfs(&self, req: &Request, ino: INodeNo) -> Result<StatfsResponse, Errno> {
-        Ok(StatfsResponse::new(0, 0, 0, 0, 0, 512, 255, 0))
+        warn!("statfs not implemented for inode {}", ino);
+        Err(Errno::ENOTSUP)
     }
 
     /// Set an extended attribute.
