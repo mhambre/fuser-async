@@ -5,14 +5,19 @@
 
 use std::ffi::OsStr;
 use std::path::Path;
+use std::time::SystemTime;
 
-use log::warn;
+use log::{debug, warn};
 use tokio::io;
 
 use crate::{
-    Config, Errno, FileHandle, INodeNo, KernelConfig, LockOwner, OpenFlags, Request, WriteFlags,
-    ll::reply_async::{DirectoryResponse, GetAttrResponse, LookupResponse},
-    reply_async::{ReadResponse, WriteResponse},
+    AccessFlags, BsdFileFlags, Config, CopyFileRangeFlags, Errno, FileHandle, INodeNo,
+    KernelConfig, LockOwner, OpenFlags, RenameFlags, Request, TimeOrNow, WriteFlags,
+    reply_async::{
+        AttrResponse, CreateResponse, DataResponse, DirectoryResponse, EntryResponse,
+        GetAttrResponse, LookupResponse, OpenResponse, ReadResponse, StatfsResponse, WriteResponse,
+        XattrResponse,
+    },
     session_async::AsyncSessionBuilder,
 };
 
@@ -72,11 +77,157 @@ pub trait AsyncFilesystem: Send + Sync + 'static {
         Err(Errno::ENOTSUP)
     }
 
+    /// Forget about an inode. Internal only, the kernel is just making us aware for
+    /// bookkeeping.
+    async fn forget(&self, req: &Request, ino: INodeNo, nlookup: u64) {
+        debug!("forget not implemented for inode {}", ino);
+    }
+
+    /// Set file attributes.
+    async fn setattr(
+        &self,
+        req: &Request,
+        ino: INodeNo,
+        mode: Option<u32>,
+        uid: Option<u32>,
+        gid: Option<u32>,
+        size: Option<u64>,
+        atime: Option<TimeOrNow>,
+        mtime: Option<TimeOrNow>,
+        ctime: Option<SystemTime>,
+        fh: Option<FileHandle>,
+        crtime: Option<SystemTime>,
+        chgtime: Option<SystemTime>,
+        bkuptime: Option<SystemTime>,
+        flags: Option<BsdFileFlags>,
+    ) -> Result<AttrResponse, Errno> {
+        warn!(
+            "setattr not implemented for inode {}, mode {:?}, uid {:?}, gid {:?}, size {:?}, fh {:?}, flags {:?}",
+            ino, mode, uid, gid, size, fh, flags
+        );
+        Err(Errno::ENOTSUP)
+    }
+
+    /// Read a symbolic link.
+    async fn readlink(&self, req: &Request, ino: INodeNo) -> Result<DataResponse, Errno> {
+        warn!("readlink not implemented for inode {}", ino);
+        Err(Errno::ENOTSUP)
+    }
+
+    /// Create file node.
+    async fn mknod(
+        &self,
+        req: &Request,
+        parent: INodeNo,
+        name: &OsStr,
+        mode: u32,
+        umask: u32,
+        rdev: u32,
+    ) -> Result<EntryResponse, Errno> {
+        warn!(
+            "mknod not implemented for parent inode {}, name {:?}, mode {}, umask {}, rdev {}",
+            parent, name, mode, umask, rdev
+        );
+        Err(Errno::ENOTSUP)
+    }
+
+    /// Create a directory.
+    async fn mkdir(
+        &self,
+        req: &Request,
+        parent: INodeNo,
+        name: &OsStr,
+        mode: u32,
+        umask: u32,
+    ) -> Result<EntryResponse, Errno> {
+        warn!(
+            "mkdir not implemented for parent inode {}, name {:?}, mode {}, umask {}",
+            parent, name, mode, umask
+        );
+        Err(Errno::ENOTSUP)
+    }
+
+    /// Remove a file.
+    async fn unlink(&self, req: &Request, parent: INodeNo, name: &OsStr) -> Result<(), Errno> {
+        warn!(
+            "unlink not implemented for parent inode {}, name {:?}",
+            parent, name
+        );
+        Err(Errno::ENOTSUP)
+    }
+
+    /// Remove a directory.
+    async fn rmdir(&self, req: &Request, parent: INodeNo, name: &OsStr) -> Result<(), Errno> {
+        warn!(
+            "rmdir not implemented for parent inode {}, name {:?}",
+            parent, name
+        );
+        Err(Errno::ENOTSUP)
+    }
+
+    /// Create a symbolic link.
+    async fn symlink(
+        &self,
+        req: &Request,
+        parent: INodeNo,
+        link_name: &OsStr,
+        target: &Path,
+    ) -> Result<EntryResponse, Errno> {
+        warn!(
+            "symlink not implemented for parent inode {}, link_name {:?}, target {:?}",
+            parent, link_name, target
+        );
+        Err(Errno::ENOTSUP)
+    }
+
+    /// Rename a file.
+    async fn rename(
+        &self,
+        req: &Request,
+        parent: INodeNo,
+        name: &OsStr,
+        newparent: INodeNo,
+        newname: &OsStr,
+        flags: RenameFlags,
+    ) -> Result<(), Errno> {
+        warn!(
+            "rename not implemented for parent inode {}, name {:?}, newparent {}, newname {:?}, flags {:?}",
+            parent, name, newparent, newname, flags
+        );
+        Err(Errno::ENOTSUP)
+    }
+
+    /// Create a hard link.
+    async fn link(
+        &self,
+        req: &Request,
+        ino: INodeNo,
+        newparent: INodeNo,
+        newname: &OsStr,
+    ) -> Result<EntryResponse, Errno> {
+        warn!(
+            "link not implemented for inode {}, newparent {}, newname {:?}",
+            ino, newparent, newname
+        );
+        Err(Errno::ENOTSUP)
+    }
+
+    /// Open a file.
+    async fn open(
+        &self,
+        req: &Request,
+        ino: INodeNo,
+        flags: OpenFlags,
+    ) -> Result<OpenResponse, Errno> {
+        warn!("open not implemented for inode {}, flags {:?}", ino, flags);
+        Err(Errno::ENOTSUP)
+    }
+
     /// Return the data of a file. This is called by the kernel when it needs to read the contents
     /// of a file.
     async fn read(
         &self,
-        context: &Request,
+        req: &Request,
         ino: INodeNo,
         file_handle: FileHandle,
         offset: u64,
@@ -86,23 +237,6 @@ pub trait AsyncFilesystem: Send + Sync + 'static {
     ) -> Result<ReadResponse, Errno> {
         warn!(
             "read not implemented for inode {}, offset {}, size {}",
-            ino, offset, size
-        );
-        Err(Errno::ENOTSUP)
-    }
-
-    /// Construct a directory listing response for the given directory inode. This is called by
-    /// the kernel when it needs to read the contents of a directory.
-    async fn readdir(
-        &self,
-        context: &Request,
-        ino: INodeNo,
-        file_handle: FileHandle,
-        size: u32,
-        offset: u64,
-    ) -> Result<DirectoryResponse, Errno> {
-        warn!(
-            "readdir not implemented for inode {}, offset {}, size {}",
             ino, offset, size
         );
         Err(Errno::ENOTSUP)
@@ -137,6 +271,181 @@ pub trait AsyncFilesystem: Send + Sync + 'static {
             ino,
             offset,
             data.len()
+        );
+        Err(Errno::ENOTSUP)
+    }
+
+    /// Release an open file.
+    async fn release(
+        &self,
+        req: &Request,
+        ino: INodeNo,
+        fh: FileHandle,
+        flags: OpenFlags,
+        lock_owner: Option<LockOwner>,
+        flush: bool,
+    ) -> Result<(), Errno> {
+        warn!("release not implemented for inode {}, fh {:?}", ino, fh);
+        Err(Errno::ENOTSUP)
+    }
+
+    /// Open a directory.
+    async fn opendir(
+        &self,
+        req: &Request,
+        ino: INodeNo,
+        flags: OpenFlags,
+    ) -> Result<OpenResponse, Errno> {
+        warn!(
+            "opendir not implemented for inode {}, flags {:?}",
+            ino, flags
+        );
+        Err(Errno::ENOTSUP)
+    }
+
+    /// Construct a directory listing response for the given directory inode. This is called by
+    /// the kernel when it needs to read the contents of a directory.
+    async fn readdir(
+        &self,
+        req: &Request,
+        ino: INodeNo,
+        file_handle: FileHandle,
+        size: u32,
+        offset: u64,
+    ) -> Result<DirectoryResponse, Errno> {
+        warn!(
+            "readdir not implemented for inode {}, offset {}, size {}",
+            ino, offset, size
+        );
+        Err(Errno::ENOTSUP)
+    }
+
+    /// Release an open directory.
+    async fn releasedir(
+        &self,
+        req: &Request,
+        ino: INodeNo,
+        fh: FileHandle,
+        flags: OpenFlags,
+    ) -> Result<(), Errno> {
+        warn!("releasedir not implemented for inode {}, fh {:?}", ino, fh);
+        Err(Errno::ENOTSUP)
+    }
+
+    /// Get file system statistics.
+    async fn statfs(&self, req: &Request, ino: INodeNo) -> Result<StatfsResponse, Errno> {
+        warn!("statfs not implemented for inode {}", ino);
+        Err(Errno::ENOTSUP)
+    }
+
+    /// Set an extended attribute.
+    async fn setxattr(
+        &self,
+        req: &Request,
+        ino: INodeNo,
+        name: &OsStr,
+        value: &[u8],
+        flags: i32,
+        position: u32,
+    ) -> Result<(), Errno> {
+        warn!(
+            "setxattr not implemented for inode {}, name {:?}, flags {}, position {}",
+            ino, name, flags, position
+        );
+        Err(Errno::ENOTSUP)
+    }
+
+    /// Get an extended attribute.
+    async fn getxattr(
+        &self,
+        req: &Request,
+        ino: INodeNo,
+        name: &OsStr,
+        size: u32,
+    ) -> Result<XattrResponse, Errno> {
+        warn!(
+            "getxattr not implemented for inode {}, name {:?}, size {}",
+            ino, name, size
+        );
+        Err(Errno::ENOTSUP)
+    }
+
+    /// List extended attribute names.
+    async fn listxattr(
+        &self,
+        req: &Request,
+        ino: INodeNo,
+        size: u32,
+    ) -> Result<XattrResponse, Errno> {
+        warn!("listxattr not implemented for inode {}, size {}", ino, size);
+        Err(Errno::ENOTSUP)
+    }
+
+    /// Remove an extended attribute.
+    async fn removexattr(&self, req: &Request, ino: INodeNo, name: &OsStr) -> Result<(), Errno> {
+        warn!(
+            "removexattr not implemented for inode {}, name {:?}",
+            ino, name
+        );
+        Err(Errno::ENOTSUP)
+    }
+
+    /// Check file access permissions.
+    async fn access(&self, req: &Request, ino: INodeNo, mask: AccessFlags) -> Result<(), Errno> {
+        warn!("access not implemented for inode {}, mask {:?}", ino, mask);
+        Err(Errno::ENOTSUP)
+    }
+
+    /// Create and open a file.
+    async fn create(
+        &self,
+        req: &Request,
+        parent: INodeNo,
+        name: &OsStr,
+        mode: u32,
+        umask: u32,
+        flags: i32,
+    ) -> Result<CreateResponse, Errno> {
+        warn!(
+            "create not implemented for parent inode {}, name {:?}, mode {}, umask {}, flags {}",
+            parent, name, mode, umask, flags
+        );
+        Err(Errno::ENOTSUP)
+    }
+
+    /// Preallocate or deallocate file space.
+    async fn fallocate(
+        &self,
+        req: &Request,
+        ino: INodeNo,
+        fh: FileHandle,
+        offset: u64,
+        length: u64,
+        mode: i32,
+    ) -> Result<(), Errno> {
+        warn!(
+            "fallocate not implemented for inode {}, offset {}, length {}, mode {}",
+            ino, offset, length, mode
+        );
+        Err(Errno::ENOTSUP)
+    }
+
+    /// Copy a file range.
+    async fn copy_file_range(
+        &self,
+        req: &Request,
+        ino_in: INodeNo,
+        fh_in: FileHandle,
+        offset_in: u64,
+        ino_out: INodeNo,
+        fh_out: FileHandle,
+        offset_out: u64,
+        len: u64,
+        flags: CopyFileRangeFlags,
+    ) -> Result<WriteResponse, Errno> {
+        warn!(
+            "copy_file_range not implemented for src ({}, {}, {}), dest ({}, {}, {}), len {}, flags {:?}",
+            ino_in, fh_in, offset_in, ino_out, fh_out, offset_out, len, flags
         );
         Err(Errno::ENOTSUP)
     }
