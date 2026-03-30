@@ -1,23 +1,50 @@
-# FUSE (Filesystem in Userspace) for Rust
+# Async FUSE (Filesystem in Userspace) for Rust
 
-![CI](https://github.com/cberner/fuser/actions/workflows/ci.yml/badge.svg)
-[![Crates.io](https://img.shields.io/crates/v/fuser.svg)](https://crates.io/crates/fuser)
-[![Documentation](https://docs.rs/fuser/badge.svg)](https://docs.rs/fuser)
-[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/cberner/fuser/blob/master/LICENSE.md)
-[![dependency status](https://deps.rs/repo/github/cberner/fuser/status.svg)](https://deps.rs/repo/github/cberner/fuser)
+![CI](https://github.com/mhambre/async-fuser/actions/workflows/ci.yml/badge.svg)
+[![Crates.io](https://img.shields.io/crates/v/async-fuser.svg)](https://crates.io/crates/async-fuser)
+[![status: experimental](https://github.com/GIScience/badges/raw/master/status/experimental.svg)](https://github.com/GIScience/badges#experimental)
+[![Documentation](https://docs.rs/async-fuser/badge.svg)](https://docs.rs/async-fuser)
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/mhambre/async-fuser/blob/master/LICENSE.md)
+[![dependency status](https://deps.rs/repo/github/mhambre/async-fuser/status.svg)](https://deps.rs/repo/github/mhambre/async-fuser)
 
 ## About
 
-**FUSE-Rust** is a [Rust] library crate for easy implementation of [FUSE filesystems][FUSE for Linux] in userspace.
+**Async-FUSE-Rust** is a Rust crate for building FUSE filesystems with both
+synchronous and fully asynchronous APIs.
 
-FUSE-Rust does not just provide bindings, it is a rewrite of the original FUSE C library to fully take advantage of Rust's architecture.
+It is a fork of the [`fuser` crate](https://github.com/cberner/fuser), extended with a native async interface designed around Rust’s async ecosystem ([Tokio](https://tokio.rs/)), rather than wrapping a synchronous implementation.
 
-This library was originally forked from the [`fuse` crate](https://github.com/zargony/fuse-rs) with the intention
-of continuing development. In particular adding features from ABIs after 7.19
+The async API operates directly on `/dev/fuse` using an [`AsyncFd`](https://docs.rs/tokio/latest/tokio/io/unix/struct.AsyncFd.html), enabling non-blocking filesystem implementations without thread-per-request overhead.
+
+The crate remains entirely API-compatible with `fuser`'s main API and can be used as a drop-in replacement for `fuser` version >=0.17.0.
+
+#### Important Notes:
+   * The asynchronous API is still in development and may have breaking changes. It is not recommended for production use yet, at least not without thorough testing, but feedback and contributions are welcome.
+  * The `async` feature is enabled by default, disable default features to use the synchronous API if you are not using it.
+  * Contributions to non-async features and bug fixes should be reported to the upstream `fuser` crate, and will make their way in once their master is updated.
+
+## Why Async?
+
+FUSE filesystems often operate under concurrent access from multiple processes and users. A synchronous implementation typically relies on thread-per-request handling, which can become inefficient under load due to thread contention and context switching.
+
+The asynchronous API in Async-FUSE-Rust enables a different execution model:
+
+* **Efficient multi-user concurrency**: Multiple filesystem operations (e.g. `read`, `lookup`, `readdir`) can be processed concurrently without blocking threads, improving throughput under parallel access patterns.
+* **Integration with async ecosystems**: Designed around Tokio, the async API composes naturally with existing async infrastructure such as: networked backends (e.g. HTTP, gRPC, object storage), databases/caches, and distributed systems components. This avoids the need to bridge between blocking and non-blocking code.
+* **End-to-end non-blocking design**: The async API operates directly on `/dev/fuse` using `AsyncFd`, rather than wrapping a synchronous interface, enabling fully non-blocking request handling.
+
+## Examples
+
+Minimal examples are available:
+
+- [`examples/hello.rs`](./examples/hello.rs): synchronous filesystem
+- [`examples/async_hello.rs`](./examples/async_hello.rs): asynchronous filesystem
+
+These demonstrate the basic structure required to mount and serve a filesystem.
 
 ## Documentation
 
-[FUSE-Rust reference][Documentation]
+[Async-FUSE-Rust reference][Documentation]
 
 ## Details
 
@@ -27,15 +54,15 @@ A working FUSE filesystem consists of three parts:
 1. The **userspace library** (libfuse) that helps the userspace process to establish and run communication with the kernel driver.
 1. The **userspace implementation** that actually processes the filesystem operations.
 
-The kernel driver is provided by the FUSE project, the userspace implementation needs to be provided by the developer. FUSE-Rust provides a replacement for the libfuse userspace library between these two. This way, a developer can fully take advantage of the Rust type interface and runtime features when building a FUSE filesystem in Rust.
+The kernel driver is provided by the FUSE project, the userspace implementation needs to be provided by the developer. Async-FUSE-Rust provides a replacement for the libfuse userspace library between these two. This way, a developer can fully take advantage of the Rust type interface and runtime features when building a FUSE filesystem in Rust.
 
 Except for a single setup (mount) function call and a final teardown (umount) function call to libfuse, everything runs in Rust, and on Linux these calls to libfuse are optional. They can be removed by building without the "libfuse" feature flag.
 
 ## Dependencies
 
-FUSE must be installed to build or run programs that use FUSE-Rust (i.e. kernel driver and libraries. Some platforms may also require userland utils like `fusermount`). A default installation of FUSE is usually sufficient.
+FUSE must be installed to build or run programs that use Async-FUSE-Rust (i.e. kernel driver and libraries. Some platforms may also require userland utils like `fusermount`). A default installation of FUSE is usually sufficient.
 
-To build FUSE-Rust or any program that depends on it, `pkg-config` needs to be installed as well.
+To build Async-FUSE-Rust or any program that depends on it, `pkg-config` needs to be installed as well.
 
 ### Linux
 
@@ -95,21 +122,26 @@ pkg install fusefs-libs pkgconf
 ## Usage
 
 ```sh
-cargo add fuser
+cargo add async-fuser
 ```
 
 or put this in your `Cargo.toml`:
 
 ```toml
 [dependencies]
-fuser = "0.15"
+async-fuser = "0.17"
 ```
 
-To create a new filesystem, implement the trait `fuser::Filesystem`. See the [documentation] for details or the `examples` directory for some basic examples.
+To create a new filesystem, implement the trait `async_fuser::Filesystem`. This trait is kept up-to-date with `fuser::Filesystem`. To take advantage of the asynchronous API, enable the "async" feature flag, and use the `async_fuser::lib_async::AsyncFilesystem` trait. See the [documentation][Documentation] for details or the `examples` directory for some basic examples.
+
+Unlike other Asynchronous FUSE-Rust APIs, the asynchronous API is not a wrapper around a synchronous API. It is completely asynchronous down to the `/dev/fuse` file descriptor using [`tokio::io::unix::AsyncFd`](https://docs.rs/tokio/latest/tokio/io/unix/struct.AsyncFd.html). While this isn't truly as far as we can go, see: [tokio-uring](https://github.com/tokio-rs/tokio-uring), for compatibility's sake this is the most practical approach. 
 
 ## To Do
 
-Most features of libfuse up to 3.10.3 are implemented. Feel free to contribute. See the [list of issues][issues] on GitHub and search the source files for comments containing "`TODO`" or "`FIXME`" to see what's still missing.
+Most features of libfuse up to 3.10.3 are implemented. Feel free to contribute. See the [list of issues][Issues (Asynchronous API)] on GitHub and search the source files for comments containing "`TODO`" or "`FIXME`" to see what's still missing.
+
+If any of the issues are unrelated to the asynchronous API, they should be reported to the upstream [list of issues][Issues (Upstream API)] for the `fuser` crate and will make their way in once
+their master is updated.
 
 ## Compatibility
 
@@ -127,9 +159,10 @@ Fork, hack, submit pull request. Make sure to make it useful for the target audi
 [Homebrew]: https://brew.sh
 [Changelog]: https://keepachangelog.com/en/1.0.0/
 
-[FUSE-Rust]: https://github.com/cberner/fuser
-[issues]: https://github.com/cberner/fuser/issues
-[Documentation]: https://docs.rs/fuser
+[FUSE-Rust (Upstream Parent)]: https://github.com/cberner/fuser
+[Issues (Upstream API)]: https://github.com/cberner/fuser/issues
+[Issues (Asynchronous API)]: https://github.com/mhambre/async-fuser/issues
+[Documentation]: https://docs.rs/async-fuser
 
 [FUSE for Linux]: https://github.com/libfuse/libfuse/
 [FUSE for macOS]: https://macfuse.github.io
