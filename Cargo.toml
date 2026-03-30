@@ -4,23 +4,26 @@ members = [".", "fuser-tests"]
 [workspace.package]
 edition = "2024"
 rust-version = "1.85"
-authors = ["Christopher Berner <me@cberner.com>"]
+authors = [
+    "Matthew Hambrecht <hambrechtmatt@gmail.com>",
+    "Christopher Berner <me@cberner.com>",
+]
 license = "MIT"
-repository = "https://github.com/cberner/fuser"
+repository = "https://github.com/mhambre/fuser"
 
 [package]
 name = "fuser"
-description = "Filesystem in Userspace (FUSE) for Rust"
+description = "Async + Sync Filesystem in Userspace (FUSE) building library for Rust"
 license.workspace = true
 repository.workspace = true
-documentation = "https://docs.rs/fuser"
-homepage = "https://github.com/cberner/fuser"
+documentation = "https://docs.rs/async-fuser"
+homepage = "https://github.com/mhambre/async-fuser"
 version = "0.17.0"
 edition.workspace = true
 rust-version.workspace = true
 readme = "README.md"
 authors.workspace = true
-keywords = ["fuse", "filesystem", "system", "bindings"]
+keywords = ["fuse", "filesystem", "system", "bindings", "async", "tokio"]
 categories = [
     "external-ffi-bindings",
     "api-bindings",
@@ -75,7 +78,7 @@ nix = { version = "0.30.0", features = ["poll", "fs", "ioctl"] }
 pkg-config = "0.3.14"
 
 [features]
-default = []
+default = ["async"]
 async = ["async-trait", "tokio"]
 # Deprecated in favor of async, but still available for a while to avoid breaking changes
 experimental = ["async-trait", "tokio"]
