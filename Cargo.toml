@@ -23,7 +23,7 @@ edition.workspace = true
 rust-version.workspace = true
 readme = "README.md"
 authors.workspace = true
-keywords = ["fuse", "filesystem", "system", "bindings", "async", "tokio"]
+keywords = ["fuse", "filesystem", "system", "tokio", "async"]
 categories = [
     "external-ffi-bindings",
     "api-bindings",
