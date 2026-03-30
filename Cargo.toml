@@ -9,10 +9,10 @@ authors = [
     "Christopher Berner <me@cberner.com>",
 ]
 license = "MIT"
-repository = "https://github.com/mhambre/fuser"
+repository = "https://github.com/mhambre/async-fuser"
 
 [package]
-name = "fuser"
+name = "async-fuser"
 description = "Async + Sync Filesystem in Userspace (FUSE) building library for Rust"
 license.workspace = true
 repository.workspace = true

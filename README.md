@@ -1,11 +1,11 @@
 # Async FUSE (Filesystem in Userspace) for Rust
 
-![CI](https://github.com/cberner/fuser/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/mhambre/async-fuser/actions/workflows/ci.yml/badge.svg)
 [![Crates.io](https://img.shields.io/crates/v/async-fuser.svg)](https://crates.io/crates/async-fuser)
 [![status: experimental](https://github.com/GIScience/badges/raw/master/status/experimental.svg)](https://github.com/GIScience/badges#experimental)
 [![Documentation](https://docs.rs/async-fuser/badge.svg)](https://docs.rs/async-fuser)
-[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/cberner/fuser/blob/master/LICENSE.md)
-[![dependency status](https://deps.rs/repo/github/cberner/fuser/status.svg)](https://deps.rs/repo/github/cberner/fuser)
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/mhambre/async-fuser/blob/master/LICENSE.md)
+[![dependency status](https://deps.rs/repo/github/mhambre/async-fuser/status.svg)](https://deps.rs/repo/github/mhambre/async-fuser)
 
 ## About
 
@@ -16,7 +16,12 @@ It is a fork of the [`fuser` crate](https://github.com/cberner/fuser), extended 
 
 The async API operates directly on `/dev/fuse` using an [`AsyncFd`](https://docs.rs/tokio/latest/tokio/io/unix/struct.AsyncFd.html), enabling non-blocking filesystem implementations without thread-per-request overhead.
 
-The crate remains entirely API-compatible with `fuser`'s main API and can be used as a drop-in replacement for `fuser` version >0.17.0.
+The crate remains entirely API-compatible with `fuser`'s main API and can be used as a drop-in replacement for `fuser` version >=0.17.0.
+
+#### Important Notes:
+   * The asynchronous API is still in development and may have breaking changes. It is not recommended for production use yet, at least not without thorough testing, but feedback and contributions are welcome.
+  * The `async` feature is enabled by default, disable default features to use the synchronous API if you are not using it.
+  * Contributions to non-async features and bug fixes should be reported to the upstream `fuser` crate, and will make their way in once their master is updated.
 
 ## Why Async?
 
@@ -57,7 +62,7 @@ Except for a single setup (mount) function call and a final teardown (umount) fu
 
 FUSE must be installed to build or run programs that use Async-FUSE-Rust (i.e. kernel driver and libraries. Some platforms may also require userland utils like `fusermount`). A default installation of FUSE is usually sufficient.
 
-To build FUSE-Rust or any program that depends on it, `pkg-config` needs to be installed as well.
+To build Async-FUSE-Rust or any program that depends on it, `pkg-config` needs to be installed as well.
 
 ### Linux
 
@@ -127,13 +132,9 @@ or put this in your `Cargo.toml`:
 async-fuser = "0.17"
 ```
 
-To create a new filesystem, implement the trait `fuser_async::Filesystem`. This trait is kept up-to-date with `fuser::Filesystem`. To take advantage of the asynchronous API, enable the "async" feature flag, and use the `fuser_async::lib_async::AsyncFilesystem` trait. See the [documentation][Documentation] for details or the `examples` directory for some basic examples.
+To create a new filesystem, implement the trait `async_fuser::Filesystem`. This trait is kept up-to-date with `fuser::Filesystem`. To take advantage of the asynchronous API, enable the "async" feature flag, and use the `async_fuser::lib_async::AsyncFilesystem` trait. See the [documentation][Documentation] for details or the `examples` directory for some basic examples.
 
-Unlike other Asynchronous FUSE-Rust APIs, the asynchronous API is not a wrapper around a synchronous API. It is completely asynchronous down to the `/dev/fuse` file descriptor using [`tokio::io::unix::AsyncFd`](https://docs.rs/tokio/latest/tokio/io/unix/struct.AsyncFd.html). While this isn't truly as far as we can go, see: [tokio-uring](https://github.com/tokio-rs/tokio-uring), for compatibility sake this is the most practical approach. 
-
-***Note #1:* The asynchronous API is still in development and may have breaking changes. It is not recommended for production use yet, at least not without thorough testing, but feedback and contributions are welcome.*
-***Note #2:* `async` feature is enabled by default, disable default features to use the synchronous API if you
-are not using it.*
+Unlike other Asynchronous FUSE-Rust APIs, the asynchronous API is not a wrapper around a synchronous API. It is completely asynchronous down to the `/dev/fuse` file descriptor using [`tokio::io::unix::AsyncFd`](https://docs.rs/tokio/latest/tokio/io/unix/struct.AsyncFd.html). While this isn't truly as far as we can go, see: [tokio-uring](https://github.com/tokio-rs/tokio-uring), for compatibility's sake this is the most practical approach. 
 
 ## To Do
 
