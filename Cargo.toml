@@ -98,6 +98,10 @@ name = "async_hello"
 required-features = ["async"]
 
 [[example]]
+name = "simple_async"
+required-features = ["async"]
+
+[[example]]
 name = "poll"
 
 [[example]]
