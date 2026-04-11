@@ -1,6 +1,8 @@
 name: MacStadium CI
 
-on: []
+on:
+  pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read

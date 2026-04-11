@@ -261,7 +261,11 @@ fn libc_umount(mnt: &CStr) -> nix::Result<()> {
 
 /// Warning: This will return true if the filesystem has been detached (lazy unmounted), but not
 /// yet destroyed by the kernel.
-#[cfg(any(all(not(target_os = "macos"), test), fuser_mount_impl = "pure-rust"))]
+#[cfg(any(
+    all(not(target_os = "macos"), test),
+    fuser_mount_impl = "pure-rust",
+    feature = "async"
+))]
 fn is_mounted(fuse_device: &DevFuse) -> bool {
     use std::os::unix::io::AsFd;
     use std::slice;

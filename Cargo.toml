@@ -32,6 +32,9 @@ categories = [
 ]
 build = "build.rs"
 
+[lib]
+name = "fuser"
+
 [dependencies]
 bitflags = "2.9"
 libc = "0.2.51"
