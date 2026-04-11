@@ -18,10 +18,11 @@ The async API operates directly on `/dev/fuse` using an [`AsyncFd`](https://docs
 
 The crate remains entirely API-compatible with `fuser`'s main API and can be used as a drop-in replacement for `fuser` version >=0.17.0.
 
-#### Important Notes:
-   * The asynchronous API is still in development and may have breaking changes. It is not recommended for production use yet, at least not without thorough testing, but feedback and contributions are welcome.
-  * The `async` feature is enabled by default, disable default features to use the synchronous API if you are not using it.
-  * Contributions to non-async features and bug fixes should be reported to the upstream `fuser` crate, and will make their way in once their master is updated.
+#### Important Notes
+
+* The asynchronous API is still in development and may have breaking changes. It is not recommended for production use yet, at least not without thorough testing, but feedback and contributions are welcome.
+* The `async` feature is enabled by default, disable default features to use the synchronous API if you are not using it.
+* Contributions to non-async features and bug fixes should be reported to the upstream `fuser` crate, and will make their way in once their master is updated.
 
 ## Why Async?
 
@@ -37,8 +38,8 @@ The asynchronous API in Async-FUSE-Rust enables a different execution model:
 
 Minimal examples are available:
 
-- [`examples/hello.rs`](./examples/hello.rs): synchronous filesystem
-- [`examples/async_hello.rs`](./examples/async_hello.rs): asynchronous filesystem
+* [`examples/hello.rs`](./examples/hello.rs): synchronous filesystem
+* [`examples/async_hello.rs`](./examples/async_hello.rs): asynchronous filesystem
 
 These demonstrate the basic structure required to mount and serve a filesystem.
 
@@ -92,6 +93,7 @@ sudo yum install fuse-devel pkgconfig
 
 Install [FUSE for macOS], which can be obtained from their website or installed using the Homebrew or Nix package managers. macOS version 10.9 or later is required. If you are using a Mac with Apple Silicon, you must also [enable support for third party kernel extensions][enable kext].
 
+**Note:** Async support for MacOS is currently entirely unsupported. Support is upcoming and tracked by issue [#16](https://github.com/mhambre/async-fuser/issues/16).
 
 #### To install using Homebrew
 
@@ -134,7 +136,7 @@ async-fuser = "0.17"
 
 To create a new filesystem, implement the trait `async_fuser::Filesystem`. This trait is kept up-to-date with `fuser::Filesystem`. To take advantage of the asynchronous API, enable the "async" feature flag, and use the `async_fuser::lib_async::AsyncFilesystem` trait. See the [documentation][Documentation] for details or the `examples` directory for some basic examples.
 
-Unlike other Asynchronous FUSE-Rust APIs, the asynchronous API is not a wrapper around a synchronous API. It is completely asynchronous down to the `/dev/fuse` file descriptor using [`tokio::io::unix::AsyncFd`](https://docs.rs/tokio/latest/tokio/io/unix/struct.AsyncFd.html). While this isn't truly as far as we can go, see: [tokio-uring](https://github.com/tokio-rs/tokio-uring), for compatibility's sake this is the most practical approach. 
+Unlike other Asynchronous FUSE-Rust APIs, the asynchronous API is not a wrapper around a synchronous API. It is completely asynchronous down to the `/dev/fuse` file descriptor using [`tokio::io::unix::AsyncFd`](https://docs.rs/tokio/latest/tokio/io/unix/struct.AsyncFd.html). While this isn't truly as far as we can go, see: [tokio-uring](https://github.com/tokio-rs/tokio-uring), for compatibility's sake this is the most practical approach.
 
 ## To Do
 
@@ -156,10 +158,8 @@ Licensed under [MIT License](LICENSE.md), except for those files in `examples/` 
 Fork, hack, submit pull request. Make sure to make it useful for the target audience, keep the project's philosophy and Rust coding standards in mind. For larger or essential changes, you may want to open an issue for discussion first. Also remember to update the [Changelog] if your changes are relevant to the users.
 
 [Rust]: https://rust-lang.org
-[Homebrew]: https://brew.sh
 [Changelog]: https://keepachangelog.com/en/1.0.0/
 
-[FUSE-Rust (Upstream Parent)]: https://github.com/cberner/fuser
 [Issues (Upstream API)]: https://github.com/cberner/fuser/issues
 [Issues (Asynchronous API)]: https://github.com/mhambre/async-fuser/issues
 [Documentation]: https://docs.rs/async-fuser

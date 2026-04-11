@@ -1,6 +1,7 @@
 //! FUSE kernel driver communication
 //!
 //! Raw communication channel to the FUSE kernel driver.
+#![cfg_attr(target_os = "macos", allow(unused))] // TODO: remove this when macOS support is implemented
 
 #[cfg(fuser_mount_impl = "libfuse2")]
 mod fuse2;
@@ -191,6 +192,7 @@ impl AsyncMount {
     }
 
     /// Mount the filesystem. This must be called before the filesystem can be used.
+    #[cfg(not(target_os = "macos"))]
     pub(crate) async fn mount(
         mut self,
         mountpoint: &Path,
@@ -207,6 +209,20 @@ impl AsyncMount {
                 .map_err(|e| tokio::io::Error::new(e.kind(), format!("mount_impl: {e}")))?,
         );
         Ok(self)
+    }
+
+    /// Mount the filesystem. This must be called before the filesystem can be used.
+    #[cfg(target_os = "macos")]
+    pub(crate) async fn mount(
+        self,
+        mountpoint: &Path,
+        options: &[MountOption],
+        acl: SessionACL,
+    ) -> tokio::io::Result<Self> {
+        let _ = (self, mountpoint, options, acl);
+        Err(tokio::io::Error::other(
+            "async FUSE mounts are not supported on macOS",
+        ))
     }
 
     /// Get a reference to the underlying [`AsyncDevFuse`]. This will return `None` if the filesystem is
@@ -261,11 +277,7 @@ fn libc_umount(mnt: &CStr) -> nix::Result<()> {
 
 /// Warning: This will return true if the filesystem has been detached (lazy unmounted), but not
 /// yet destroyed by the kernel.
-#[cfg(any(
-    all(not(target_os = "macos"), test),
-    fuser_mount_impl = "pure-rust",
-    feature = "async"
-))]
+#[cfg(any(all(not(target_os = "macos"), test), fuser_mount_impl = "pure-rust"))]
 fn is_mounted(fuse_device: &DevFuse) -> bool {
     use std::os::unix::io::AsFd;
     use std::slice;

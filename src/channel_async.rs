@@ -1,7 +1,5 @@
-use crate::dev_fuse_async::set_nonblocking;
 use log::error;
 use std::os::fd::AsFd;
-use std::os::fd::AsRawFd;
 use std::os::fd::BorrowedFd;
 use std::sync::Arc;
 
@@ -9,6 +7,10 @@ use nix::errno::Errno;
 
 #[cfg(feature = "async")]
 use crate::dev_fuse_async::AsyncDevFuse;
+#[cfg(target_os = "linux")]
+use crate::dev_fuse_async::set_nonblocking;
+#[cfg(target_os = "linux")]
+use std::os::fd::AsRawFd;
 
 /// A raw async communication channel to the FUSE kernel driver. This uses [`AsyncDevFuse`] under the hood and
 /// provides async APIs for receiving data.

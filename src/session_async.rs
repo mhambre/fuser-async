@@ -166,7 +166,7 @@ impl<FS: AsyncFilesystem> AsyncSession<FS> {
         let file = mount.dev_fuse().ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::Other,
-                "Failed to get /dev/fuse file descriptor from mount",
+                "Failed to get FUSE device file descriptor from mount",
             )
         })?;
         let ch = AsyncChannel::new(file.clone());

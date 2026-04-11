@@ -24,8 +24,10 @@ impl AsFd for AsyncDevFuse {
 }
 
 impl AsyncDevFuse {
+    #[cfg(target_os = "linux")]
     pub(crate) const PATH: &'static str = "/dev/fuse";
 
+    #[cfg(target_os = "linux")]
     pub(crate) async fn open() -> tokio::io::Result<Self> {
         let file = std::fs::OpenOptions::new()
             .read(true)
@@ -41,8 +43,18 @@ impl AsyncDevFuse {
     pub(crate) fn from_file(file: std::fs::File) -> tokio::io::Result<Self> {
         set_nonblocking(&file)
             .map_err(|e| tokio::io::Error::new(e.kind(), format!("set_nonblocking: {e}")))?;
-        let async_fd = AsyncFd::new(file)
-            .map_err(|e| tokio::io::Error::new(e.kind(), format!("AsyncFd::new: {e}")))?;
+        let async_fd = AsyncFd::new(file).map_err(|e| {
+            if e.raw_os_error() == Some(libc::EINVAL) {
+                return tokio::io::Error::new(
+                    e.kind(),
+                    format!(
+                        "AsyncFd::new: {e}. macOS/macFUSE file descriptors are not currently supported by this async runtime path"
+                    ),
+                );
+            }
+
+            tokio::io::Error::new(e.kind(), format!("AsyncFd::new: {e}"))
+        })?;
         Ok(Self(async_fd))
     }
 }
