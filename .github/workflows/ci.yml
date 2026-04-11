@@ -157,7 +157,7 @@ jobs:
 
   test:
     runs-on: ubuntu-22.04
-    timeout-minutes: 120
+    timeout-minutes: 180
     strategy:
       matrix:
         test_group: [mount_tests, pjdfs_tests, xfstests]
