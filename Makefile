@@ -24,7 +24,7 @@ xfstests_pure:
 	 -v "$(shell pwd)/logs:/code/logs" fuser:xfstests bash -c "cd /code/fuser && ./xfstests.sh"
 
 xfstests_pure_async:
-	docker build -t fuser:xfstests -f xfstests.Dockerfile .
+	docker build -t --build-arg BUILD_FEATURES='--features=async' --build-arg BUILD_TARGET_BIN=target/release/examples/simple_async fuser:xfstests -f xfstests.Dockerfile .
 	# Additional permissions are needed to be able to mount FUSE
 	docker run --rm -$(INTERACTIVE)t --cap-add SYS_ADMIN --cap-add IPC_OWNER --device /dev/fuse --security-opt apparmor:unconfined \
 	 --memory=2g --kernel-memory=200m \

@@ -93,7 +93,7 @@ sudo yum install fuse-devel pkgconfig
 
 Install [FUSE for macOS], which can be obtained from their website or installed using the Homebrew or Nix package managers. macOS version 10.9 or later is required. If you are using a Mac with Apple Silicon, you must also [enable support for third party kernel extensions][enable kext].
 
-**Note:** Async support for MacOS is currently entirely unsupported. Support is upcoming and tracked by issue [#16](https://github.com/mhambre/async-fuser/issues/16).
+**Note:** Async support for macOS is currently entirely unsupported. Support is upcoming and tracked by issue [#16](https://github.com/mhambre/async-fuser/issues/16).
 
 #### To install using Homebrew
 
