@@ -134,7 +134,7 @@ or put this in your `Cargo.toml`:
 async-fuser = "0.17"
 ```
 
-To create a new filesystem, implement the trait `async_fuser::Filesystem`. This trait is kept up-to-date with `fuser::Filesystem`. To take advantage of the asynchronous API, enable the "async" feature flag, and use the `async_fuser::lib_async::AsyncFilesystem` trait. See the [documentation][Documentation] for details or the `examples` directory for some basic examples.
+To create a new filesystem, implement the trait `fuser::Filesystem`. This trait is kept up-to-date with `fuser::Filesystem`. To take advantage of the asynchronous API, enable the "async" feature flag, and use the `fuser::lib_async::AsyncFilesystem` trait. See the [documentation][Documentation] for details or the `examples` directory for some basic examples.
 
 Unlike other Asynchronous FUSE-Rust APIs, the asynchronous API is not a wrapper around a synchronous API. It is completely asynchronous down to the `/dev/fuse` file descriptor using [`tokio::io::unix::AsyncFd`](https://docs.rs/tokio/latest/tokio/io/unix/struct.AsyncFd.html). While this isn't truly as far as we can go, see: [tokio-uring](https://github.com/tokio-rs/tokio-uring), for compatibility's sake this is the most practical approach.
 
