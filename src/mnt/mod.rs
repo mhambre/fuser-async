@@ -250,7 +250,7 @@ impl Drop for AsyncMount {
     }
 }
 
-#[cfg_attr(fuser_mount_impl = "macos-no-mount", expect(dead_code))]
+#[cfg_attr(fuser_mount_impl = "macos-no-mount", allow(dead_code))]
 fn libc_umount(mnt: &CStr) -> nix::Result<()> {
     #[cfg(any(
         target_os = "macos",
