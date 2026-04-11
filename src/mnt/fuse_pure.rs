@@ -5,7 +5,6 @@
 
 use std::env;
 use std::ffi::CStr;
-use std::ffi::CString;
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io;
@@ -16,16 +15,13 @@ use std::io::Read;
 use std::mem;
 use std::os::fd::AsFd;
 use std::os::fd::BorrowedFd;
-use std::os::unix::ffi::OsStrExt;
 use std::os::unix::io::AsRawFd;
 use std::os::unix::io::FromRawFd;
 use std::os::unix::io::RawFd;
 use std::os::unix::net::UnixStream;
 use std::os::unix::process::CommandExt;
-use std::path::Path;
 use std::process::Command;
 use std::process::Stdio;
-use std::sync::Arc;
 
 use log::debug;
 use log::error;
@@ -40,6 +36,7 @@ use nix::sys::socket::recvmsg;
 
 use crate::SessionACL;
 use crate::dev_fuse::DevFuse;
+#[cfg(fuser_mount_impl = "pure-rust")]
 use crate::mnt::is_mounted;
 use crate::mnt::mount_options::MountOption;
 use crate::mnt::mount_options::MountOptionGroup;
@@ -47,11 +44,21 @@ use crate::mnt::mount_options::option_group;
 use crate::mnt::mount_options::option_to_flag;
 use crate::mnt::mount_options::option_to_string;
 
+#[cfg(fuser_mount_impl = "pure-rust")]
+use std::ffi::CString;
+#[cfg(fuser_mount_impl = "pure-rust")]
+use std::os::unix::ffi::OsStrExt;
+#[cfg(fuser_mount_impl = "pure-rust")]
+use std::path::Path;
+#[cfg(fuser_mount_impl = "pure-rust")]
+use std::sync::Arc;
+
 const FUSERMOUNT_BIN: &str = "fusermount";
 const FUSERMOUNT3_BIN: &str = "fusermount3";
 const FUSERMOUNT_COMM_ENV: &str = "_FUSE_COMMFD";
 const MOUNT_FUSEFS_BIN: &str = "mount_fusefs";
 
+#[cfg(fuser_mount_impl = "pure-rust")]
 #[derive(Debug)]
 pub(crate) struct MountImpl {
     mountpoint: CString,
@@ -59,6 +66,7 @@ pub(crate) struct MountImpl {
     fuse_device: Arc<DevFuse>,
 }
 
+#[cfg(fuser_mount_impl = "pure-rust")]
 impl MountImpl {
     pub(crate) fn new(
         mountpoint: &Path,

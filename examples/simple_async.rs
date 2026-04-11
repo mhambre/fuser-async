@@ -34,7 +34,6 @@ use fuser::BsdFileFlags;
 use fuser::Config;
 use fuser::Errno;
 use fuser::FileHandle;
-use fuser::FileType;
 use fuser::FopenFlags;
 use fuser::Generation;
 use fuser::INodeNo;
@@ -532,219 +531,16 @@ impl SimpleFS {
     }
 }
 
-struct ReplyAttrCapture(Option<Result<AttrResponse, Errno>>);
-
-impl ReplyAttrCapture {
-    fn attr(&mut self, ttl: &Duration, attr: &fuser::FileAttr) {
-        self.0 = Some(Ok(AttrResponse::new(*ttl, *attr)));
-    }
-
-    fn error(&mut self, err: Errno) {
-        self.0 = Some(Err(err));
-    }
-
-    fn finish(self) -> Result<AttrResponse, Errno> {
-        self.0.expect("attribute reply not set")
-    }
+fn attr_response(attrs: InodeAttributes) -> AttrResponse {
+    AttrResponse::new(Duration::ZERO, attrs.into())
 }
 
-struct ReplyEntryCapture(Option<Result<EntryResponse, Errno>>);
-
-impl ReplyEntryCapture {
-    fn entry(&mut self, ttl: &Duration, attr: &fuser::FileAttr, generation: Generation) {
-        self.0 = Some(Ok(EntryResponse::new(*ttl, *attr, generation)));
-    }
-
-    fn error(&mut self, err: Errno) {
-        self.0 = Some(Err(err));
-    }
-
-    fn finish(self) -> Result<EntryResponse, Errno> {
-        self.0.expect("entry reply not set")
-    }
+fn entry_response(attrs: InodeAttributes) -> EntryResponse {
+    EntryResponse::new(Duration::ZERO, attrs.into(), Generation(0))
 }
 
-struct ReplyDataCapture(Option<Result<DataResponse, Errno>>);
-
-impl ReplyDataCapture {
-    fn data(&mut self, data: &[u8]) {
-        self.0 = Some(Ok(DataResponse::new(data.to_vec())));
-    }
-
-    fn error(&mut self, err: Errno) {
-        self.0 = Some(Err(err));
-    }
-
-    fn finish(self) -> Result<DataResponse, Errno> {
-        self.0.expect("data reply not set")
-    }
-}
-
-struct ReplyReadCapture(Option<Result<ReadResponse, Errno>>);
-
-impl ReplyReadCapture {
-    fn data(&mut self, data: &[u8]) {
-        self.0 = Some(Ok(ReadResponse::new(data.to_vec())));
-    }
-
-    fn error(&mut self, err: Errno) {
-        self.0 = Some(Err(err));
-    }
-
-    fn finish(self) -> Result<ReadResponse, Errno> {
-        self.0.expect("read reply not set")
-    }
-}
-
-struct ReplyEmptyCapture(Option<Result<(), Errno>>);
-
-impl ReplyEmptyCapture {
-    fn ok(&mut self) {
-        self.0 = Some(Ok(()));
-    }
-
-    fn error(&mut self, err: Errno) {
-        self.0 = Some(Err(err));
-    }
-
-    fn finish(self) -> Result<(), Errno> {
-        self.0.expect("empty reply not set")
-    }
-}
-
-struct ReplyOpenCapture(Option<Result<OpenResponse, Errno>>);
-
-impl ReplyOpenCapture {
-    fn opened(&mut self, fh: FileHandle, flags: FopenFlags) {
-        self.0 = Some(Ok(OpenResponse::new(fh, flags)));
-    }
-
-    fn error(&mut self, err: Errno) {
-        self.0 = Some(Err(err));
-    }
-
-    fn finish(self) -> Result<OpenResponse, Errno> {
-        self.0.expect("open reply not set")
-    }
-}
-
-struct ReplyWriteCapture(Option<Result<WriteResponse, Errno>>);
-
-impl ReplyWriteCapture {
-    fn written(&mut self, size: u32) {
-        self.0 = Some(Ok(WriteResponse::new(size)));
-    }
-
-    fn error(&mut self, err: Errno) {
-        self.0 = Some(Err(err));
-    }
-
-    fn finish(self) -> Result<WriteResponse, Errno> {
-        self.0.expect("write reply not set")
-    }
-}
-
-struct ReplyDirectoryCapture {
-    result: Option<Result<DirectoryResponse, Errno>>,
-    directory: Option<DirectoryResponse>,
-}
-
-impl ReplyDirectoryCapture {
-    fn new(size: usize) -> Self {
-        Self {
-            result: None,
-            directory: Some(DirectoryResponse::new(size)),
-        }
-    }
-
-    fn add<T: AsRef<OsStr>>(&mut self, ino: INodeNo, offset: u64, kind: FileType, name: T) -> bool {
-        self.directory
-            .as_mut()
-            .expect("directory reply already finished")
-            .add(ino, offset, kind, name)
-    }
-
-    fn ok(&mut self) {
-        self.result = Some(Ok(self
-            .directory
-            .take()
-            .expect("directory reply already finished")));
-    }
-
-    fn error(&mut self, err: Errno) {
-        self.result = Some(Err(err));
-    }
-
-    fn finish(self) -> Result<DirectoryResponse, Errno> {
-        self.result.expect("directory reply not set")
-    }
-}
-
-struct ReplyStatfsCapture(Option<Result<StatfsResponse, Errno>>);
-
-impl ReplyStatfsCapture {
-    fn statfs(
-        &mut self,
-        blocks: u64,
-        bfree: u64,
-        bavail: u64,
-        files: u64,
-        ffree: u64,
-        bsize: u32,
-        namelen: u32,
-        frsize: u32,
-    ) {
-        self.0 = Some(Ok(StatfsResponse::new(
-            blocks, bfree, bavail, files, ffree, bsize, namelen, frsize,
-        )));
-    }
-
-    fn finish(self) -> Result<StatfsResponse, Errno> {
-        self.0.expect("statfs reply not set")
-    }
-}
-
-struct ReplyXattrCapture(Option<Result<XattrResponse, Errno>>);
-
-impl ReplyXattrCapture {
-    fn size(&mut self, size: u32) {
-        self.0 = Some(Ok(XattrResponse::size(size)));
-    }
-
-    fn data(&mut self, data: &[u8]) {
-        self.0 = Some(Ok(XattrResponse::data(data.to_vec())));
-    }
-
-    fn error(&mut self, err: Errno) {
-        self.0 = Some(Err(err));
-    }
-
-    fn finish(self) -> Result<XattrResponse, Errno> {
-        self.0.expect("xattr reply not set")
-    }
-}
-
-struct ReplyCreateCapture(Option<Result<CreateResponse, Errno>>);
-
-impl ReplyCreateCapture {
-    fn created(
-        &mut self,
-        ttl: &Duration,
-        attr: &fuser::FileAttr,
-        generation: Generation,
-        fh: FileHandle,
-        flags: FopenFlags,
-    ) {
-        self.0 = Some(Ok(CreateResponse::new(*ttl, *attr, generation, fh, flags)));
-    }
-
-    fn error(&mut self, err: Errno) {
-        self.0 = Some(Err(err));
-    }
-
-    fn finish(self) -> Result<CreateResponse, Errno> {
-        self.0.expect("create reply not set")
-    }
+fn create_response(attrs: InodeAttributes, fh: FileHandle, flags: FopenFlags) -> CreateResponse {
+    CreateResponse::new(Duration::ZERO, attrs.into(), Generation(0), fh, flags)
 }
 
 #[async_trait::async_trait]
@@ -794,10 +590,8 @@ impl AsyncFilesystem for SimpleFS {
         parent: INodeNo,
         name: &OsStr,
     ) -> Result<EntryResponse, Errno> {
-        let mut reply = ReplyEntryCapture(None);
         if name.len() > MAX_NAME_LENGTH as usize {
-            reply.error(Errno::ENAMETOOLONG);
-            return reply.finish();
+            return Err(Errno::ENAMETOOLONG);
         }
         let parent_attrs = self.get_inode(parent).unwrap();
         if !check_access(
@@ -808,15 +602,13 @@ impl AsyncFilesystem for SimpleFS {
             _req.gid(),
             AccessFlags::X_OK,
         ) {
-            reply.error(Errno::EACCES);
-            return reply.finish();
+            return Err(Errno::EACCES);
         }
 
         match self.lookup_name(parent, name) {
-            Ok(attrs) => reply.entry(&Duration::new(0, 0), &attrs.into(), fuser::Generation(0)),
-            Err(error_code) => reply.error(error_code),
+            Ok(attrs) => Ok(entry_response(attrs)),
+            Err(error_code) => Err(error_code),
         }
-        reply.finish()
     }
 
     async fn forget(&self, _req: &Request, _ino: INodeNo, _nlookup: u64) {}
@@ -827,12 +619,10 @@ impl AsyncFilesystem for SimpleFS {
         ino: INodeNo,
         _fh: Option<FileHandle>,
     ) -> Result<AttrResponse, Errno> {
-        let mut reply = ReplyAttrCapture(None);
         match self.get_inode(ino) {
-            Ok(attrs) => reply.attr(&Duration::new(0, 0), &attrs.into()),
-            Err(error_code) => reply.error(error_code),
+            Ok(attrs) => Ok(attr_response(attrs)),
+            Err(error_code) => Err(error_code),
         }
-        reply.finish()
     }
 
     async fn setattr(
@@ -852,13 +642,9 @@ impl AsyncFilesystem for SimpleFS {
         _bkuptime: Option<SystemTime>,
         _flags: Option<BsdFileFlags>,
     ) -> Result<AttrResponse, Errno> {
-        let mut reply = ReplyAttrCapture(None);
         let mut attrs = match self.get_inode(ino) {
             Ok(attrs) => attrs,
-            Err(error_code) => {
-                reply.error(error_code);
-                return reply.finish();
-            }
+            Err(error_code) => return Err(error_code),
         };
 
         if let Some(mode) = mode {
@@ -870,13 +656,11 @@ impl AsyncFilesystem for SimpleFS {
                     && (mode as u16 & libc::S_ISVTX as u16) != 0
                     && attrs.kind != FileKind::Directory
                 {
-                    reply.error(Errno::EFTYPE);
-                    return reply.finish();
+                    return Err(Errno::EFTYPE);
                 }
             }
             if _req.uid() != 0 && _req.uid() != attrs.uid {
-                reply.error(Errno::EPERM);
-                return reply.finish();
+                return Err(Errno::EPERM);
             }
             if _req.uid() != 0
                 && _req.gid() != attrs.gid
@@ -890,8 +674,7 @@ impl AsyncFilesystem for SimpleFS {
             }
             attrs.last_metadata_changed = time_now();
             self.write_inode(&attrs);
-            reply.attr(&Duration::new(0, 0), &attrs.into());
-            return reply.finish();
+            return Ok(attr_response(attrs));
         }
 
         if uid.is_some() || gid.is_some() {
@@ -899,8 +682,7 @@ impl AsyncFilesystem for SimpleFS {
             if let Some(gid) = gid {
                 // Non-root users can only change gid to a group they're in
                 if _req.uid() != 0 && !get_groups(_req.pid()).contains(&gid) {
-                    reply.error(Errno::EPERM);
-                    return reply.finish();
+                    return Err(Errno::EPERM);
                 }
             }
             if let Some(uid) = uid {
@@ -908,14 +690,12 @@ impl AsyncFilesystem for SimpleFS {
                     // but no-op changes by the owner are not an error
                     && !(uid == attrs.uid && _req.uid() == attrs.uid)
                 {
-                    reply.error(Errno::EPERM);
-                    return reply.finish();
+                    return Err(Errno::EPERM);
                 }
             }
             // Only owner may change the group
             if gid.is_some() && _req.uid() != 0 && _req.uid() != attrs.uid {
-                reply.error(Errno::EPERM);
-                return reply.finish();
+                return Err(Errno::EPERM);
             }
 
             if attrs.mode & (libc::S_IXUSR | libc::S_IXGRP | libc::S_IXOTH) as u16 != 0 {
@@ -937,8 +717,7 @@ impl AsyncFilesystem for SimpleFS {
             }
             attrs.last_metadata_changed = time_now();
             self.write_inode(&attrs);
-            reply.attr(&Duration::new(0, 0), &attrs.into());
-            return reply.finish();
+            return Ok(attr_response(attrs));
         }
 
         if let Some(size) = size {
@@ -949,17 +728,12 @@ impl AsyncFilesystem for SimpleFS {
                 // with W_OK will never fail to truncate, even if the file has been subsequently
                 // chmod'ed
                 if Self::check_file_handle_write(handle.into()) {
-                    if let Err(error_code) = self.truncate(ino, size, 0, 0) {
-                        reply.error(error_code);
-                        return reply.finish();
-                    }
+                    self.truncate(ino, size, 0, 0)?;
                 } else {
-                    reply.error(Errno::EACCES);
-                    return reply.finish();
+                    return Err(Errno::EACCES);
                 }
             } else if let Err(error_code) = self.truncate(ino, size, _req.uid(), _req.gid()) {
-                reply.error(error_code);
-                return reply.finish();
+                return Err(error_code);
             }
         }
 
@@ -968,8 +742,7 @@ impl AsyncFilesystem for SimpleFS {
             debug!("utimens() called with {ino:?}, atime={atime:?}");
 
             if attrs.uid != _req.uid() && _req.uid() != 0 && atime != Now {
-                reply.error(Errno::EPERM);
-                return reply.finish();
+                return Err(Errno::EPERM);
             }
 
             if attrs.uid != _req.uid()
@@ -982,8 +755,7 @@ impl AsyncFilesystem for SimpleFS {
                     AccessFlags::W_OK,
                 )
             {
-                reply.error(Errno::EACCES);
-                return reply.finish();
+                return Err(Errno::EACCES);
             }
 
             attrs.last_accessed = match atime {
@@ -997,8 +769,7 @@ impl AsyncFilesystem for SimpleFS {
             debug!("utimens() called with {ino:?}, mtime={mtime:?}");
 
             if attrs.uid != _req.uid() && _req.uid() != 0 && mtime != Now {
-                reply.error(Errno::EPERM);
-                return reply.finish();
+                return Err(Errno::EPERM);
             }
 
             if attrs.uid != _req.uid()
@@ -1011,8 +782,7 @@ impl AsyncFilesystem for SimpleFS {
                     AccessFlags::W_OK,
                 )
             {
-                reply.error(Errno::EACCES);
-                return reply.finish();
+                return Err(Errno::EACCES);
             }
 
             attrs.last_modified = match mtime {
@@ -1024,12 +794,10 @@ impl AsyncFilesystem for SimpleFS {
         }
 
         let attrs = self.get_inode(ino).unwrap();
-        reply.attr(&Duration::new(0, 0), &attrs.into());
-        reply.finish()
+        Ok(attr_response(attrs))
     }
 
     async fn readlink(&self, _req: &Request, ino: INodeNo) -> Result<DataResponse, Errno> {
-        let mut reply = ReplyDataCapture(None);
         debug!("readlink() called on {ino:?}");
         let path = self.content_path(ino);
         match File::open(path) {
@@ -1037,13 +805,10 @@ impl AsyncFilesystem for SimpleFS {
                 let file_size = file.metadata().unwrap().len();
                 let mut buffer = vec![0; file_size as usize];
                 file.read_exact(&mut buffer).unwrap();
-                reply.data(&buffer);
+                Ok(DataResponse::new(buffer))
             }
-            _ => {
-                reply.error(Errno::ENOENT);
-            }
+            _ => Err(Errno::ENOENT),
         }
-        reply.finish()
     }
 
     async fn mknod(
@@ -1055,7 +820,6 @@ impl AsyncFilesystem for SimpleFS {
         _umask: u32,
         _rdev: u32,
     ) -> Result<EntryResponse, Errno> {
-        let mut reply = ReplyEntryCapture(None);
         let file_type = mode & libc::S_IFMT as u32;
 
         if file_type != libc::S_IFREG as u32
@@ -1066,21 +830,16 @@ impl AsyncFilesystem for SimpleFS {
             warn!(
                 "mknod() implementation is incomplete. Only supports regular files, symlinks, and directories. Got {mode:o}"
             );
-            reply.error(Errno::EPERM);
-            return reply.finish();
+            return Err(Errno::EPERM);
         }
 
         if self.lookup_name(parent, name).is_ok() {
-            reply.error(Errno::EEXIST);
-            return reply.finish();
+            return Err(Errno::EEXIST);
         }
 
         let mut parent_attrs = match self.get_inode(parent) {
             Ok(attrs) => attrs,
-            Err(error_code) => {
-                reply.error(error_code);
-                return reply.finish();
-            }
+            Err(error_code) => return Err(error_code),
         };
 
         if !check_access(
@@ -1091,8 +850,7 @@ impl AsyncFilesystem for SimpleFS {
             _req.gid(),
             AccessFlags::W_OK,
         ) {
-            reply.error(Errno::EACCES);
-            return reply.finish();
+            return Err(Errno::EACCES);
         }
         parent_attrs.last_modified = time_now();
         parent_attrs.last_metadata_changed = time_now();
@@ -1110,8 +868,7 @@ impl AsyncFilesystem for SimpleFS {
                 && (mode as u16 & libc::S_ISVTX as u16) != 0
                 && kind != FileKind::Directory
             {
-                reply.error(Errno::EFTYPE);
-                return reply.finish();
+                return Err(Errno::EFTYPE);
             }
         }
 
@@ -1145,8 +902,7 @@ impl AsyncFilesystem for SimpleFS {
         self.write_directory_content(parent, &entries);
 
         // TODO: implement flags
-        reply.entry(&Duration::new(0, 0), &attrs.into(), fuser::Generation(0));
-        reply.finish()
+        Ok(entry_response(attrs))
     }
 
     async fn mkdir(
@@ -1157,19 +913,14 @@ impl AsyncFilesystem for SimpleFS {
         mut mode: u32,
         _umask: u32,
     ) -> Result<EntryResponse, Errno> {
-        let mut reply = ReplyEntryCapture(None);
         debug!("mkdir() called with {parent:?} {name:?} {mode:o}");
         if self.lookup_name(parent, name).is_ok() {
-            reply.error(Errno::EEXIST);
-            return reply.finish();
+            return Err(Errno::EEXIST);
         }
 
         let mut parent_attrs = match self.get_inode(parent) {
             Ok(attrs) => attrs,
-            Err(error_code) => {
-                reply.error(error_code);
-                return reply.finish();
-            }
+            Err(error_code) => return Err(error_code),
         };
 
         if !check_access(
@@ -1180,8 +931,7 @@ impl AsyncFilesystem for SimpleFS {
             _req.gid(),
             AccessFlags::W_OK,
         ) {
-            reply.error(Errno::EACCES);
-            return reply.finish();
+            return Err(Errno::EACCES);
         }
         parent_attrs.last_modified = time_now();
         parent_attrs.last_metadata_changed = time_now();
@@ -1220,27 +970,19 @@ impl AsyncFilesystem for SimpleFS {
         entries.insert(name.as_bytes().to_vec(), (inode.0, FileKind::Directory));
         self.write_directory_content(parent, &entries);
 
-        reply.entry(&Duration::new(0, 0), &attrs.into(), fuser::Generation(0));
-        reply.finish()
+        Ok(entry_response(attrs))
     }
 
     async fn unlink(&self, _req: &Request, parent: INodeNo, name: &OsStr) -> Result<(), Errno> {
-        let mut reply = ReplyEmptyCapture(None);
         debug!("unlink() called with {parent:?} {name:?}");
         let mut attrs = match self.lookup_name(parent, name) {
             Ok(attrs) => attrs,
-            Err(error_code) => {
-                reply.error(error_code);
-                return reply.finish();
-            }
+            Err(error_code) => return Err(error_code),
         };
 
         let mut parent_attrs = match self.get_inode(parent) {
             Ok(attrs) => attrs,
-            Err(error_code) => {
-                reply.error(error_code);
-                return reply.finish();
-            }
+            Err(error_code) => return Err(error_code),
         };
 
         if !check_access(
@@ -1251,8 +993,7 @@ impl AsyncFilesystem for SimpleFS {
             _req.gid(),
             AccessFlags::W_OK,
         ) {
-            reply.error(Errno::EACCES);
-            return reply.finish();
+            return Err(Errno::EACCES);
         }
 
         let uid = _req.uid();
@@ -1262,8 +1003,7 @@ impl AsyncFilesystem for SimpleFS {
             && uid != parent_attrs.uid
             && uid != attrs.uid
         {
-            reply.error(Errno::EACCES);
-            return reply.finish();
+            return Err(Errno::EACCES);
         }
 
         parent_attrs.last_metadata_changed = time_now();
@@ -1279,27 +1019,19 @@ impl AsyncFilesystem for SimpleFS {
         entries.remove(name.as_bytes());
         self.write_directory_content(parent, &entries);
 
-        reply.ok();
-        reply.finish()
+        Ok(())
     }
 
     async fn rmdir(&self, _req: &Request, parent: INodeNo, name: &OsStr) -> Result<(), Errno> {
-        let mut reply = ReplyEmptyCapture(None);
         debug!("rmdir() called with {parent:?} {name:?}");
         let mut attrs = match self.lookup_name(parent, name) {
             Ok(attrs) => attrs,
-            Err(error_code) => {
-                reply.error(error_code);
-                return reply.finish();
-            }
+            Err(error_code) => return Err(error_code),
         };
 
         let mut parent_attrs = match self.get_inode(parent) {
             Ok(attrs) => attrs,
-            Err(error_code) => {
-                reply.error(error_code);
-                return reply.finish();
-            }
+            Err(error_code) => return Err(error_code),
         };
 
         // Directories always have a self and parent link
@@ -1309,8 +1041,7 @@ impl AsyncFilesystem for SimpleFS {
             .len()
             > 2
         {
-            reply.error(Errno::ENOTEMPTY);
-            return reply.finish();
+            return Err(Errno::ENOTEMPTY);
         }
         if !check_access(
             parent_attrs.uid,
@@ -1320,8 +1051,7 @@ impl AsyncFilesystem for SimpleFS {
             _req.gid(),
             AccessFlags::W_OK,
         ) {
-            reply.error(Errno::EACCES);
-            return reply.finish();
+            return Err(Errno::EACCES);
         }
 
         // "Sticky bit" handling
@@ -1330,8 +1060,7 @@ impl AsyncFilesystem for SimpleFS {
             && _req.uid() != parent_attrs.uid
             && _req.uid() != attrs.uid
         {
-            reply.error(Errno::EACCES);
-            return reply.finish();
+            return Err(Errno::EACCES);
         }
 
         parent_attrs.last_metadata_changed = time_now();
@@ -1347,8 +1076,7 @@ impl AsyncFilesystem for SimpleFS {
         entries.remove(name.as_bytes());
         self.write_directory_content(parent, &entries);
 
-        reply.ok();
-        reply.finish()
+        Ok(())
     }
 
     async fn symlink(
@@ -1358,14 +1086,10 @@ impl AsyncFilesystem for SimpleFS {
         link_name: &OsStr,
         target: &Path,
     ) -> Result<EntryResponse, Errno> {
-        let mut reply = ReplyEntryCapture(None);
         debug!("symlink() called with {parent:?} {link_name:?} {target:?}");
         let mut parent_attrs = match self.get_inode(parent) {
             Ok(attrs) => attrs,
-            Err(error_code) => {
-                reply.error(error_code);
-                return reply.finish();
-            }
+            Err(error_code) => return Err(error_code),
         };
 
         if !check_access(
@@ -1376,8 +1100,7 @@ impl AsyncFilesystem for SimpleFS {
             _req.gid(),
             AccessFlags::W_OK,
         ) {
-            reply.error(Errno::EACCES);
-            return reply.finish();
+            return Err(Errno::EACCES);
         }
         parent_attrs.last_modified = time_now();
         parent_attrs.last_metadata_changed = time_now();
@@ -1399,11 +1122,7 @@ impl AsyncFilesystem for SimpleFS {
             xattrs: BTreeMap::default(),
         };
 
-        if let Err(error_code) = self.insert_link(_req, parent, link_name, inode, FileKind::Symlink)
-        {
-            reply.error(error_code);
-            return reply.finish();
-        }
+        self.insert_link(_req, parent, link_name, inode, FileKind::Symlink)?;
         self.write_inode(&attrs);
 
         let path = self.content_path(inode);
@@ -1415,8 +1134,7 @@ impl AsyncFilesystem for SimpleFS {
             .unwrap();
         file.write_all(target.as_os_str().as_bytes()).unwrap();
 
-        reply.entry(&Duration::new(0, 0), &attrs.into(), fuser::Generation(0));
-        reply.finish()
+        Ok(entry_response(attrs))
     }
 
     async fn rename(
@@ -1428,25 +1146,18 @@ impl AsyncFilesystem for SimpleFS {
         newname: &OsStr,
         flags: RenameFlags,
     ) -> Result<(), Errno> {
-        let mut reply = ReplyEmptyCapture(None);
         debug!(
             "rename() called with: source {parent:?} {name:?}, \
             destination {newparent:?} {newname:?}, flags {flags:#b}",
         );
         let mut inode_attrs = match self.lookup_name(parent, name) {
             Ok(attrs) => attrs,
-            Err(error_code) => {
-                reply.error(error_code);
-                return reply.finish();
-            }
+            Err(error_code) => return Err(error_code),
         };
 
         let mut parent_attrs = match self.get_inode(parent) {
             Ok(attrs) => attrs,
-            Err(error_code) => {
-                reply.error(error_code);
-                return reply.finish();
-            }
+            Err(error_code) => return Err(error_code),
         };
 
         if !check_access(
@@ -1457,8 +1168,7 @@ impl AsyncFilesystem for SimpleFS {
             _req.gid(),
             AccessFlags::W_OK,
         ) {
-            reply.error(Errno::EACCES);
-            return reply.finish();
+            return Err(Errno::EACCES);
         }
 
         // "Sticky bit" handling
@@ -1467,16 +1177,12 @@ impl AsyncFilesystem for SimpleFS {
             && _req.uid() != parent_attrs.uid
             && _req.uid() != inode_attrs.uid
         {
-            reply.error(Errno::EACCES);
-            return reply.finish();
+            return Err(Errno::EACCES);
         }
 
         let mut new_parent_attrs = match self.get_inode(newparent) {
             Ok(attrs) => attrs,
-            Err(error_code) => {
-                reply.error(error_code);
-                return reply.finish();
-            }
+            Err(error_code) => return Err(error_code),
         };
 
         if !check_access(
@@ -1487,8 +1193,7 @@ impl AsyncFilesystem for SimpleFS {
             _req.gid(),
             AccessFlags::W_OK,
         ) {
-            reply.error(Errno::EACCES);
-            return reply.finish();
+            return Err(Errno::EACCES);
         }
 
         // "Sticky bit" handling in new_parent
@@ -1498,8 +1203,7 @@ impl AsyncFilesystem for SimpleFS {
                     && _req.uid() != new_parent_attrs.uid
                     && _req.uid() != existing_attrs.uid
                 {
-                    reply.error(Errno::EACCES);
-                    return reply.finish();
+                    return Err(Errno::EACCES);
                 }
             }
         }
@@ -1508,10 +1212,7 @@ impl AsyncFilesystem for SimpleFS {
         if flags.contains(RenameFlags::RENAME_EXCHANGE) {
             let mut new_inode_attrs = match self.lookup_name(newparent, newname) {
                 Ok(attrs) => attrs,
-                Err(error_code) => {
-                    reply.error(error_code);
-                    return reply.finish();
-                }
+                Err(error_code) => return Err(error_code),
             };
 
             let mut entries = self.get_directory_content(newparent).unwrap();
@@ -1554,8 +1255,7 @@ impl AsyncFilesystem for SimpleFS {
                 self.write_directory_content(INodeNo(new_inode_attrs.inode), &entries);
             }
 
-            reply.ok();
-            return reply.finish();
+            return Ok(());
         }
 
         // Only overwrite an existing directory if it's empty
@@ -1567,8 +1267,7 @@ impl AsyncFilesystem for SimpleFS {
                     .len()
                     > 2
             {
-                reply.error(Errno::ENOTEMPTY);
-                return reply.finish();
+                return Err(Errno::ENOTEMPTY);
             }
         }
 
@@ -1585,8 +1284,7 @@ impl AsyncFilesystem for SimpleFS {
                 AccessFlags::W_OK,
             )
         {
-            reply.error(Errno::EACCES);
-            return reply.finish();
+            return Err(Errno::EACCES);
         }
 
         // If target already exists decrement its hardlink count
@@ -1633,8 +1331,7 @@ impl AsyncFilesystem for SimpleFS {
             self.write_directory_content(INodeNo(inode_attrs.inode), &entries);
         }
 
-        reply.ok();
-        reply.finish()
+        Ok(())
     }
 
     async fn link(
@@ -1644,24 +1341,19 @@ impl AsyncFilesystem for SimpleFS {
         newparent: INodeNo,
         newname: &OsStr,
     ) -> Result<EntryResponse, Errno> {
-        let mut reply = ReplyEntryCapture(None);
         debug!("link() called for {ino}, {newparent}, {newname:?}");
         let mut attrs = match self.get_inode(ino) {
             Ok(attrs) => attrs,
-            Err(error_code) => {
-                reply.error(error_code);
-                return reply.finish();
-            }
+            Err(error_code) => return Err(error_code),
         };
         if let Err(error_code) = self.insert_link(_req, newparent, newname, ino, attrs.kind) {
-            reply.error(error_code);
+            Err(error_code)
         } else {
             attrs.hardlinks += 1;
             attrs.last_metadata_changed = time_now();
             self.write_inode(&attrs);
-            reply.entry(&Duration::new(0, 0), &attrs.into(), fuser::Generation(0));
+            Ok(entry_response(attrs))
         }
-        reply.finish()
     }
 
     async fn open(
@@ -1670,14 +1362,12 @@ impl AsyncFilesystem for SimpleFS {
         _ino: INodeNo,
         flags: OpenFlags,
     ) -> Result<OpenResponse, Errno> {
-        let mut reply = ReplyOpenCapture(None);
         debug!("open() called for {_ino:?}");
         let (access_mask, read, write) = match flags.acc_mode() {
             OpenAccMode::O_RDONLY => {
                 // Behavior is undefined, but most filesystems return EACCES
                 if flags.0 & libc::O_TRUNC != 0 {
-                    reply.error(Errno::EACCES);
-                    return reply.finish();
+                    return Err(Errno::EACCES);
                 }
                 if flags.0 & FMODE_EXEC != 0 {
                     // Open is from internal exec syscall
@@ -1707,18 +1397,16 @@ impl AsyncFilesystem for SimpleFS {
                     } else {
                         FopenFlags::empty()
                     };
-                    reply.opened(
+                    Ok(OpenResponse::new(
                         FileHandle(self.allocate_next_file_handle(read, write)),
                         open_flags,
-                    );
+                    ))
                 } else {
-                    reply.error(Errno::EACCES);
+                    Err(Errno::EACCES)
                 }
-                return reply.finish();
             }
-            Err(error_code) => reply.error(error_code),
+            Err(error_code) => Err(error_code),
         }
-        reply.finish()
     }
 
     async fn read(
@@ -1731,11 +1419,9 @@ impl AsyncFilesystem for SimpleFS {
         _flags: OpenFlags,
         _lock_owner: Option<LockOwner>,
     ) -> Result<ReadResponse, Errno> {
-        let mut reply = ReplyReadCapture(None);
         debug!("read() called on {ino:?} offset={offset:?} size={size:?}");
         if !Self::check_file_handle_read(fh.into()) {
-            reply.error(Errno::EACCES);
-            return reply.finish();
+            return Err(Errno::EACCES);
         }
 
         let path = self.content_path(ino);
@@ -1747,13 +1433,10 @@ impl AsyncFilesystem for SimpleFS {
 
                 let mut buffer = vec![0; read_size as usize];
                 file.read_exact_at(&mut buffer, offset as u64).unwrap();
-                reply.data(&buffer);
+                Ok(ReadResponse::new(buffer))
             }
-            _ => {
-                reply.error(Errno::ENOENT);
-            }
+            _ => Err(Errno::ENOENT),
         }
-        reply.finish()
     }
 
     async fn write(
@@ -1767,11 +1450,9 @@ impl AsyncFilesystem for SimpleFS {
         _flags: OpenFlags,
         _lock_owner: Option<LockOwner>,
     ) -> Result<WriteResponse, Errno> {
-        let mut reply = ReplyWriteCapture(None);
         debug!("write() called with {:?} size={:?}", ino, data.len());
         if !Self::check_file_handle_write(fh.into()) {
-            reply.error(Errno::EACCES);
-            return reply.finish();
+            return Err(Errno::EACCES);
         }
 
         let path = self.content_path(ino);
@@ -1784,12 +1465,10 @@ impl AsyncFilesystem for SimpleFS {
                 attrs.last_metadata_changed = time_now();
                 attrs.last_modified = time_now();
                 let Ok(offset_usize): Result<usize, _> = offset.try_into() else {
-                    reply.error(Errno::EFBIG);
-                    return reply.finish();
+                    return Err(Errno::EFBIG);
                 };
                 let Some(end_offset) = data.len().checked_add(offset_usize) else {
-                    reply.error(Errno::EFBIG);
-                    return reply.finish();
+                    return Err(Errno::EFBIG);
                 };
                 if end_offset > attrs.size as usize {
                     attrs.size = end_offset as u64;
@@ -1802,13 +1481,10 @@ impl AsyncFilesystem for SimpleFS {
                 clear_suid_sgid(&mut attrs);
                 self.write_inode(&attrs);
 
-                reply.written(data.len() as u32);
+                Ok(WriteResponse::new(data.len() as u32))
             }
-            _ => {
-                reply.error(Errno::EBADF);
-            }
+            _ => Err(Errno::EBADF),
         }
-        reply.finish()
     }
 
     async fn release(
@@ -1820,12 +1496,10 @@ impl AsyncFilesystem for SimpleFS {
         _lock_owner: Option<LockOwner>,
         _flush: bool,
     ) -> Result<(), Errno> {
-        let mut reply = ReplyEmptyCapture(None);
         if let Ok(mut attrs) = self.get_inode(_ino) {
             attrs.open_file_handles -= 1;
         }
-        reply.ok();
-        reply.finish()
+        Ok(())
     }
 
     async fn opendir(
@@ -1834,14 +1508,12 @@ impl AsyncFilesystem for SimpleFS {
         _ino: INodeNo,
         _flags: OpenFlags,
     ) -> Result<OpenResponse, Errno> {
-        let mut reply = ReplyOpenCapture(None);
         debug!("opendir() called on {_ino:?}");
         let (access_mask, read, write) = match _flags.acc_mode() {
             OpenAccMode::O_RDONLY => {
                 // Behavior is undefined, but most filesystems return EACCES
                 if _flags.0 & libc::O_TRUNC != 0 {
-                    reply.error(Errno::EACCES);
-                    return reply.finish();
+                    return Err(Errno::EACCES);
                 }
                 (libc::R_OK, true, false)
             }
@@ -1866,18 +1538,16 @@ impl AsyncFilesystem for SimpleFS {
                     } else {
                         FopenFlags::empty()
                     };
-                    reply.opened(
+                    Ok(OpenResponse::new(
                         FileHandle(self.allocate_next_file_handle(read, write)),
                         open_flags,
-                    );
+                    ))
                 } else {
-                    reply.error(Errno::EACCES);
+                    Err(Errno::EACCES)
                 }
-                return reply.finish();
             }
-            Err(error_code) => reply.error(error_code),
+            Err(error_code) => Err(error_code),
         }
-        reply.finish()
     }
 
     async fn readdir(
@@ -1888,20 +1558,18 @@ impl AsyncFilesystem for SimpleFS {
         size: u32,
         offset: u64,
     ) -> Result<DirectoryResponse, Errno> {
-        let mut reply = ReplyDirectoryCapture::new(size as usize);
         debug!("readdir() called with {ino:?}");
         let entries = match self.get_directory_content(ino) {
             Ok(entries) => entries,
-            Err(error_code) => {
-                reply.error(error_code);
-                return reply.finish();
-            }
+            Err(error_code) => return Err(error_code),
         };
+
+        let mut directory = DirectoryResponse::new(size as usize);
 
         for (index, entry) in entries.iter().skip(offset as usize).enumerate() {
             let (name, (inode, file_type)) = entry;
 
-            let buffer_full: bool = reply.add(
+            let buffer_full: bool = directory.add(
                 INodeNo(*inode),
                 offset + index as u64 + 1,
                 (*file_type).into(),
@@ -1913,8 +1581,7 @@ impl AsyncFilesystem for SimpleFS {
             }
         }
 
-        reply.ok();
-        reply.finish()
+        Ok(directory)
     }
 
     async fn releasedir(
@@ -1924,19 +1591,16 @@ impl AsyncFilesystem for SimpleFS {
         _fh: FileHandle,
         _flags: OpenFlags,
     ) -> Result<(), Errno> {
-        let mut reply = ReplyEmptyCapture(None);
         if let Ok(mut attrs) = self.get_inode(_ino) {
             attrs.open_file_handles -= 1;
         }
-        reply.ok();
-        reply.finish()
+        Ok(())
     }
 
     async fn statfs(&self, _req: &Request, _ino: INodeNo) -> Result<StatfsResponse, Errno> {
-        let mut reply = ReplyStatfsCapture(None);
         warn!("statfs() implementation is a stub");
         // TODO: real implementation of this
-        reply.statfs(
+        Ok(StatfsResponse::new(
             10_000,
             10_000,
             10_000,
@@ -1945,8 +1609,7 @@ impl AsyncFilesystem for SimpleFS {
             BLOCK_SIZE,
             MAX_NAME_LENGTH,
             BLOCK_SIZE,
-        );
-        reply.finish()
+        ))
     }
 
     async fn setxattr(
@@ -1958,23 +1621,18 @@ impl AsyncFilesystem for SimpleFS {
         _flags: i32,
         _position: u32,
     ) -> Result<(), Errno> {
-        let mut reply = ReplyEmptyCapture(None);
         if let Ok(mut attrs) = self.get_inode(ino) {
-            if let Err(error) = xattr_access_check(name.as_bytes(), libc::W_OK, &attrs, _req) {
-                reply.error(error);
-                return reply.finish();
-            }
+            xattr_access_check(name.as_bytes(), libc::W_OK, &attrs, _req)?;
 
             attrs
                 .xattrs
                 .insert(name.as_bytes().to_vec(), _value.to_vec());
             attrs.last_metadata_changed = time_now();
             self.write_inode(&attrs);
-            reply.ok();
+            Ok(())
         } else {
-            reply.error(Errno::EBADF);
+            Err(Errno::EBADF)
         }
-        reply.finish()
     }
 
     async fn getxattr(
@@ -1984,31 +1642,26 @@ impl AsyncFilesystem for SimpleFS {
         key: &OsStr,
         size: u32,
     ) -> Result<XattrResponse, Errno> {
-        let mut reply = ReplyXattrCapture(None);
         if let Ok(attrs) = self.get_inode(inode) {
-            if let Err(error) = xattr_access_check(key.as_bytes(), libc::R_OK, &attrs, request) {
-                reply.error(error);
-                return reply.finish();
-            }
+            xattr_access_check(key.as_bytes(), libc::R_OK, &attrs, request)?;
 
             if let Some(data) = attrs.xattrs.get(key.as_bytes()) {
                 if size == 0 {
-                    reply.size(data.len() as u32);
+                    Ok(XattrResponse::size(data.len() as u32))
                 } else if data.len() <= size as usize {
-                    reply.data(data);
+                    Ok(XattrResponse::data(data.clone()))
                 } else {
-                    reply.error(Errno::ERANGE);
+                    Err(Errno::ERANGE)
                 }
             } else {
                 #[cfg(target_os = "linux")]
-                reply.error(Errno::ENODATA);
+                return Err(Errno::ENODATA);
                 #[cfg(not(target_os = "linux"))]
-                reply.error(Errno::ENOATTR);
+                return Err(Errno::ENOATTR);
             }
         } else {
-            reply.error(Errno::EBADF);
+            Err(Errno::EBADF)
         }
-        reply.finish()
     }
 
     async fn listxattr(
@@ -2017,7 +1670,6 @@ impl AsyncFilesystem for SimpleFS {
         ino: INodeNo,
         size: u32,
     ) -> Result<XattrResponse, Errno> {
-        let mut reply = ReplyXattrCapture(None);
         if let Ok(attrs) = self.get_inode(ino) {
             let mut bytes = vec![];
             // Convert to concatenated null-terminated strings
@@ -2026,16 +1678,15 @@ impl AsyncFilesystem for SimpleFS {
                 bytes.push(0);
             }
             if size == 0 {
-                reply.size(bytes.len() as u32);
+                Ok(XattrResponse::size(bytes.len() as u32))
             } else if bytes.len() <= size as usize {
-                reply.data(&bytes);
+                Ok(XattrResponse::data(bytes))
             } else {
-                reply.error(Errno::ERANGE);
+                Err(Errno::ERANGE)
             }
         } else {
-            reply.error(Errno::EBADF);
+            Err(Errno::EBADF)
         }
-        reply.finish()
     }
 
     async fn removexattr(
@@ -2044,43 +1695,35 @@ impl AsyncFilesystem for SimpleFS {
         inode: INodeNo,
         key: &OsStr,
     ) -> Result<(), Errno> {
-        let mut reply = ReplyEmptyCapture(None);
         if let Ok(mut attrs) = self.get_inode(inode) {
-            if let Err(error) = xattr_access_check(key.as_bytes(), libc::W_OK, &attrs, request) {
-                reply.error(error);
-                return reply.finish();
-            }
+            xattr_access_check(key.as_bytes(), libc::W_OK, &attrs, request)?;
 
             if attrs.xattrs.remove(key.as_bytes()).is_none() {
                 #[cfg(target_os = "linux")]
-                reply.error(Errno::ENODATA);
+                return Err(Errno::ENODATA);
                 #[cfg(not(target_os = "linux"))]
-                reply.error(Errno::ENOATTR);
-                return reply.finish();
+                return Err(Errno::ENOATTR);
             }
             attrs.last_metadata_changed = time_now();
             self.write_inode(&attrs);
-            reply.ok();
+            Ok(())
         } else {
-            reply.error(Errno::EBADF);
+            Err(Errno::EBADF)
         }
-        reply.finish()
     }
 
     async fn access(&self, _req: &Request, ino: INodeNo, mask: AccessFlags) -> Result<(), Errno> {
-        let mut reply = ReplyEmptyCapture(None);
         debug!("access() called with {ino:?} {mask:?}");
         match self.get_inode(ino) {
             Ok(attr) => {
                 if check_access(attr.uid, attr.gid, attr.mode, _req.uid(), _req.gid(), mask) {
-                    reply.ok();
+                    Ok(())
                 } else {
-                    reply.error(Errno::EACCES);
+                    Err(Errno::EACCES)
                 }
             }
-            Err(error_code) => reply.error(error_code),
+            Err(error_code) => Err(error_code),
         }
-        reply.finish()
     }
 
     async fn create(
@@ -2092,11 +1735,9 @@ impl AsyncFilesystem for SimpleFS {
         _umask: u32,
         flags: i32,
     ) -> Result<CreateResponse, Errno> {
-        let mut reply = ReplyCreateCapture(None);
         debug!("create() called with {parent:?} {name:?}");
         if self.lookup_name(parent, name).is_ok() {
-            reply.error(Errno::EEXIST);
-            return reply.finish();
+            return Err(Errno::EEXIST);
         }
 
         let (read, write) = match flags & libc::O_ACCMODE {
@@ -2104,18 +1745,12 @@ impl AsyncFilesystem for SimpleFS {
             libc::O_WRONLY => (false, true),
             libc::O_RDWR => (true, true),
             // Exactly one access mode flag must be specified
-            _ => {
-                reply.error(Errno::EINVAL);
-                return reply.finish();
-            }
+            _ => return Err(Errno::EINVAL),
         };
 
         let mut parent_attrs = match self.get_inode(parent) {
             Ok(attrs) => attrs,
-            Err(error_code) => {
-                reply.error(error_code);
-                return reply.finish();
-            }
+            Err(error_code) => return Err(error_code),
         };
 
         if !check_access(
@@ -2126,8 +1761,7 @@ impl AsyncFilesystem for SimpleFS {
             req.gid(),
             AccessFlags::W_OK,
         ) {
-            reply.error(Errno::EACCES);
-            return reply.finish();
+            return Err(Errno::EACCES);
         }
         parent_attrs.last_modified = time_now();
         parent_attrs.last_metadata_changed = time_now();
@@ -2145,8 +1779,7 @@ impl AsyncFilesystem for SimpleFS {
                 && (mode as u16 & libc::S_ISVTX as u16) != 0
                 && kind != FileKind::Directory
             {
-                reply.error(Errno::EFTYPE);
-                return reply.finish();
+                return Err(Errno::EFTYPE);
             }
         }
 
@@ -2180,14 +1813,11 @@ impl AsyncFilesystem for SimpleFS {
         self.write_directory_content(parent, &entries);
 
         // TODO: implement flags
-        reply.created(
-            &Duration::new(0, 0),
-            &attrs.into(),
-            fuser::Generation(0),
+        Ok(create_response(
+            attrs,
             FileHandle(self.allocate_next_file_handle(read, write)),
             FopenFlags::empty(),
-        );
-        reply.finish()
+        ))
     }
 
     #[cfg(target_os = "linux")]
@@ -2200,7 +1830,6 @@ impl AsyncFilesystem for SimpleFS {
         length: u64,
         mode: i32,
     ) -> Result<(), Errno> {
-        let mut reply = ReplyEmptyCapture(None);
         let path = self.content_path(ino);
         match OpenOptions::new().write(true).open(path) {
             Ok(file) => {
@@ -2216,13 +1845,10 @@ impl AsyncFilesystem for SimpleFS {
                     }
                     self.write_inode(&attrs);
                 }
-                reply.ok();
+                Ok(())
             }
-            _ => {
-                reply.error(Errno::ENOENT);
-            }
+            _ => Err(Errno::ENOENT),
         }
-        reply.finish()
     }
 
     async fn copy_file_range(
@@ -2237,17 +1863,14 @@ impl AsyncFilesystem for SimpleFS {
         size: u64,
         _flags: fuser::CopyFileRangeFlags,
     ) -> Result<WriteResponse, Errno> {
-        let mut reply = ReplyWriteCapture(None);
         debug!(
             "copy_file_range() called with src=({src_fh}, {src_inode}, {src_offset}) dest=({dest_fh}, {dest_inode}, {dest_offset}) size={size}"
         );
         if !Self::check_file_handle_read(src_fh.into()) {
-            reply.error(Errno::EACCES);
-            return reply.finish();
+            return Err(Errno::EACCES);
         }
         if !Self::check_file_handle_write(dest_fh.into()) {
-            reply.error(Errno::EACCES);
-            return reply.finish();
+            return Err(Errno::EACCES);
         }
 
         let src_path = self.content_path(src_inode);
@@ -2270,30 +1893,23 @@ impl AsyncFilesystem for SimpleFS {
                         attrs.last_metadata_changed = time_now();
                         attrs.last_modified = time_now();
                         let Ok(dest_offset_usize): Result<usize, _> = dest_offset.try_into() else {
-                            reply.error(Errno::EFBIG);
-                            return reply.finish();
+                            return Err(Errno::EFBIG);
                         };
                         let Some(end_offset) = data.len().checked_add(dest_offset_usize) else {
-                            reply.error(Errno::EFBIG);
-                            return reply.finish();
+                            return Err(Errno::EFBIG);
                         };
                         if end_offset > attrs.size as usize {
                             attrs.size = end_offset as u64;
                         }
                         self.write_inode(&attrs);
 
-                        reply.written(data.len() as u32);
+                        Ok(WriteResponse::new(data.len() as u32))
                     }
-                    _ => {
-                        reply.error(Errno::EBADF);
-                    }
+                    _ => Err(Errno::EBADF),
                 }
             }
-            _ => {
-                reply.error(Errno::ENOENT);
-            }
+            _ => Err(Errno::ENOENT),
         }
-        reply.finish()
     }
 }
 

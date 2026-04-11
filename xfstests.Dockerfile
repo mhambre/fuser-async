@@ -20,4 +20,7 @@ RUN mkdir -p /code && cd /code && git clone https://github.com/fleetfs/fuse-xfst
 
 ADD . /code/fuser/
 
-RUN cd /code/fuser && cargo build --release --examples && cp target/release/examples/simple /bin/fuser
+ARG BUILD_FEATURES
+ARG BUILD_TARGET_BIN=target/release/examples/simple
+
+RUN cd /code/fuser && cargo build --release $BUILD_FEATURES --examples && cp $BUILD_TARGET_BIN /bin/fuser
